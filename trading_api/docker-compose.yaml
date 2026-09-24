@@ -1,0 +1,25 @@
+
+services:
+  trading_api:
+    build: .
+    container_name: trading_api
+
+    # 🔹 Espone TUTTE le istanze FastAPI
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+      - "8003:8003"
+
+    # 🔹 Variabili d'ambiente lette da main.py e run_multi_instances.py
+    env_file:
+      - .env
+
+    # 🔹 Monta il codice (utile in dev)
+    volumes:
+      - ./:/code
+
+    # 🔹 Avvia le 4 istanze FastAPI proxy
+    command: ["python", "run_multi_instances.py"]
+
+    restart: unless-stopped

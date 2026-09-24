@@ -1,0 +1,206 @@
+<div class="auto-container">
+  <div class="header">
+    <h1>Auto Strategy Discovery</h1>
+    <p class="subtitle">Trova i parametri ottimali (EMA, RSI, SL/TP) per un simbolo e periodo</p>
+  </div>
+
+  <div class="config-card">
+    <div class="mode-toggle">
+      <button class="mode-btn" [class.active]="mode === 'grid'" (click)="mode = 'grid'">Grid Search</button>
+      <button class="mode-btn" [class.active]="mode === 'agent'" (click)="mode = 'agent'">AI Agent</button>
+      <span class="mode-hint" *ngIf="mode === 'agent'">l'LLM guida la ricerca: testa, analizza i risultati OOS e propone i parametri migliori</span>
+      <span class="mode-hint" *ngIf="mode === 'grid'">prova esaurientemente tutte le combinazioni di una griglia predefinita</span>
+    </div>
+    <div class="config-grid">
+      <div class="form-group">
+        <label>Symbol</label>
+        <select [(ngModel)]="config.symbol" class="form-control">
+          <option *ngFor="let s of symbols" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Days</label>
+        <input type="number" [(ngModel)]="config.days" min="7" max="1095" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Lot</label>
+        <input type="number" [(ngModel)]="config.lot" min="0.01" step="0.01" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Balance ($)</label>
+        <input type="number" [(ngModel)]="config.balance" min="100" step="100" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Direction</label>
+        <select [(ngModel)]="config.direction" class="form-control">
+          <option value="both">Both</option>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Target Return %</label>
+        <input type="number" [(ngModel)]="config.target_return" min="5" max="500" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Min Trades</label>
+        <input type="number" [(ngModel)]="config.min_trades" min="1" max="500" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Sessioni (es. London,NewYork)</label>
+        <input type="text" [(ngModel)]="config.sessions_filter" class="form-control" placeholder="vuoto = tutte" />
+      </div>
+      <div class="form-group checkbox-group">
+        <label><input type="checkbox" [(ngModel)]="config.volume_filter" /> Filtro volume</label>
+      </div>
+      <div class="form-group checkbox-group">
+        <label><input type="checkbox" [(ngModel)]="config.use_spread" /> Costi spread</label>
+      </div>
+      <div class="form-group" *ngIf="mode === 'agent'">
+        <label>Iterazioni</label>
+        <input type="number" [(ngModel)]="iterations" min="1" max="10" class="form-control" />
+      </div>
+      <div class="form-group" *ngIf="mode === 'agent'">
+        <label>Proposte / iterazione</label>
+        <input type="number" [(ngModel)]="batchSize" min="2" max="15" class="form-control" />
+      </div>
+    </div>
+
+    <div class="config-actions">
+      <button class="run-btn" (click)="runDiscovery()" [disabled]="loading">
+        {{ loading ? 'Searching...' : 'Discover Strategy' }}
+      </button>
+      <button class="cancel-btn" (click)="cancelResearch()" *ngIf="loading">Cancel</button>
+    </div>
+  </div>
+
+  <div class="error-box" *ngIf="error">{{ error }}</div>
+
+  <div class="loading-box" *ngIf="loading">
+    <div class="progress-container">
+      <div class="progress-bar" [style.width.%]="progress"></div>
+    </div>
+    <div class="progress-info">
+      <span>{{ progress }}%</span>
+      <span>Testing parameter combinations...</span>
+    </div>
+  </div>
+
+  <div class="target-summary" *ngIf="targetHits.length > 0 && !loading">
+    <div class="target-badge">
+      <span class="target-icon">&#9733;</span>
+      {{ targetHits.length }} combinazioni raggiungono il {{ targetReturn }}% di return!
+    </div>
+    <div class="target-strategies">
+      <span class="target-chip" *ngFor="let s of targetHits.slice(0, 10)">{{ s }}</span>
+      <span *ngIf="targetHits.length > 10">+{{ targetHits.length - 10 }} altre</span>
+    </div>
+  </div>
+
+  <div class="no-target" *ngIf="results.length > 0 && targetHits.length === 0 && !loading">
+    <p>Nessuna combinazione ha raggiunto il {{ targetReturn }}% di return target.
+    Prova con un periodo più lungo, simbolo diverso, o modifica il target.</p>
+  </div>
+
+  <div class="analysis-box" *ngIf="analysis && !loading">
+    <h3>Analisi dell'agente AI</h3>
+    <pre>{{ analysis }}</pre>
+  </div>
+
+  <div class="results" *ngIf="results.length > 0 && !loading">
+    <div class="results-header">
+      <h2>Migliori combinazioni per parametri</h2>
+      <span class="results-count">{{ results.length }} totali</span>
+      <button class="export-btn" (click)="exportPdf()">Export PDF (top 10)</button>
+    </div>
+
+    <div class="table-container">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('label')">Parametri</th>
+            <th class="sortable" (click)="sortBy('sl')">SL</th>
+            <th class="sortable" (click)="sortBy('tp')">TP</th>
+            <th class="sortable" (click)="sortBy('direction')">Dir</th>
+            <th class="sortable" (click)="sortBy('return_pct')">Ret IS %</th>
+            <th class="sortable" (click)="sortBy('oos_return_pct')">Ret OOS %</th>
+            <th class="sortable" (click)="sortBy('trades')">Trades</th>
+            <th class="sortable" (click)="sortBy('win_rate')">Win Rate</th>
+            <th class="sortable" (click)="sortBy('max_dd')">Max DD</th>
+            <th class="sortable" (click)="sortBy('sharpe')">Sharpe</th>
+            <th>Target</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of bestPerParams()"
+              [class.target-row]="r.target_hit"
+              [class.top-3]="bestPerParams().indexOf(r) < 3">
+            <td class="strategy-cell">{{ r.label }}</td>
+            <td>{{ r.sl }}</td>
+            <td>{{ r.tp }}</td>
+            <td><span class="direction-badge" [class.buy]="r.direction === 'buy'" [class.sell]="r.direction === 'sell'">{{ r.direction | uppercase }}</span></td>
+            <td [class.positive]="r.return_pct >= 0" [class.negative]="r.return_pct < 0" class="return-cell">
+              {{ r.return_pct >= 0 ? '+' : '' }}{{ r.return_pct | number:'1.1-1' }}%
+            </td>
+            <td [class.positive]="r.oos_return_pct >= 0" [class.negative]="r.oos_return_pct < 0" class="return-cell oos-cell">
+              {{ r.oos_return_pct >= 0 ? '+' : '' }}{{ r.oos_return_pct | number:'1.1-1' }}%
+            </td>
+            <td>{{ r.trades }}</td>
+            <td [class.positive]="r.win_rate >= 50">{{ r.win_rate | number:'1.1-1' }}%</td>
+            <td class="negative">{{ r.max_dd | number:'1.1-1' }}%</td>
+            <td [class.positive]="r.sharpe >= 1" [class.negative]="r.sharpe < 0.5">{{ r.sharpe | number:'1.2-2' }}</td>
+            <td>
+              <span class="hit-badge" *ngIf="r.target_hit" title="Raggiunge il target del {{ targetReturn }}%">&#10003;</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="all-results-toggle">
+      <details>
+        <summary>Vedi tutte le {{ results.length }} combinazioni</summary>
+        <div class="table-container">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th class="sortable" (click)="sortBy('label')">Parametri</th>
+                <th class="sortable" (click)="sortBy('sl')">SL</th>
+                <th class="sortable" (click)="sortBy('tp')">TP</th>
+                <th class="sortable" (click)="sortBy('direction')">Dir</th>
+                <th class="sortable" (click)="sortBy('return_pct')">Ret IS %</th>
+                <th class="sortable" (click)="sortBy('oos_return_pct')">Ret OOS %</th>
+                <th class="sortable" (click)="sortBy('trades')">Trades</th>
+                <th class="sortable" (click)="sortBy('win_rate')">Win Rate</th>
+                <th class="sortable" (click)="sortBy('max_dd')">Max DD</th>
+                <th class="sortable" (click)="sortBy('sharpe')">Sharpe</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let r of sortedResults" [class.target-row]="r.target_hit">
+                <td class="strategy-cell">{{ r.label }}</td>
+                <td>{{ r.sl }}</td>
+                <td>{{ r.tp }}</td>
+                <td><span class="direction-badge" [class.buy]="r.direction === 'buy'" [class.sell]="r.direction === 'sell'">{{ r.direction | uppercase }}</span></td>
+                <td [class.positive]="r.return_pct >= 0" [class.negative]="r.return_pct < 0" class="return-cell">
+                  {{ r.return_pct >= 0 ? '+' : '' }}{{ r.return_pct | number:'1.1-1' }}%
+                </td>
+                <td [class.positive]="r.oos_return_pct >= 0" [class.negative]="r.oos_return_pct < 0" class="return-cell oos-cell">
+                  {{ r.oos_return_pct >= 0 ? '+' : '' }}{{ r.oos_return_pct | number:'1.1-1' }}%
+                </td>
+                <td>{{ r.trades }}</td>
+                <td [class.positive]="r.win_rate >= 50">{{ r.win_rate | number:'1.1-1' }}%</td>
+                <td class="negative">{{ r.max_dd | number:'1.1-1' }}%</td>
+                <td [class.positive]="r.sharpe >= 1" [class.negative]="r.sharpe < 0.5">{{ r.sharpe | number:'1.2-2' }}</td>
+                <td>
+                  <span class="hit-badge" *ngIf="r.target_hit" title="Raggiunge il target del {{ targetReturn }}%">&#10003;</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>

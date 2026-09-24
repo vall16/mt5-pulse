@@ -1,0 +1,105 @@
+from contextlib import asynccontextmanager
+import logging
+import os
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from dotenv import load_dotenv
+
+# i files a cui punta il main: db.py, mt5_routes.py
+from db import router as db_router
+from db import run_migrations
+from mt5_routes import router as mt5_router
+# from trading_signals import router as trade_router
+# from trading_signals_multi import router as trade_router_multi
+# try:
+from trading_signals_multi2 import router as trade_router_multi
+from adaptive_routes import router as adaptive_router
+from signal_research_routes import router as signal_research_router
+from supervisor_routes import router as supervisor_router
+# except ImportError as e:
+#     import sys
+#     print(f"ERRORE CRITICO: {e}", file=sys.stderr)
+#     sys.exit(1)
+
+# --- LOGGING ---
+log_file_path = "./fxscript.log"
+logging.basicConfig(
+    filename=log_file_path,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logging.info("Starting API")
+
+# --- LIFESPAN HANDLER ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Gestisce startup e shutdown dell'app.
+    Qui puoi aggiungere inizializzazioni e cleanup.
+    """
+    # --- STARTUP ---
+    logging.info("✅ Manager API avviata correttamente. Nessuna inizializzazione MT5 al startup.")
+    run_migrations()
+    # start_polling()  # se vuoi avviare polling automatico
+
+    yield  # qui l'app è in esecuzione
+
+    # --- SHUTDOWN ---
+    logging.info("🛑 Manager API in chiusura. Cleanup eseguito se necessario.")
+
+# --- APP ---
+app = FastAPI(title="MT5 Manager API")
+
+# --- CORS ---
+load_dotenv()
+cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:4200")
+origins = [o.strip() for o in cors_raw.split(",")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- ROUTERS /db e /mt5 e /app sono i prefissi da aggiungere alle chiamate FE---
+app.include_router(db_router, prefix="/db", tags=["Database"])
+app.include_router(mt5_router, prefix="/mt5", tags=["MetaTrader5"])
+# app.include_router(trade_router, prefix="/trade", tags=["AppTrader5"])
+app.include_router(trade_router_multi, prefix="/trade", tags=["AppTrader5"])
+app.include_router(adaptive_router, prefix="/adaptive", tags=["AdaptiveAgent"])
+app.include_router(supervisor_router, prefix="/supervisor", tags=["SupervisorAI"])
+app.include_router(signal_research_router, prefix="", tags=["SignalResearch"])
+
+
+# --- ERROR HANDLERS ---
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    logging.error(f"Validation error: {exc.errors()} for body {body.decode()}")
+    return JSONResponse(status_code=422, content={"detail": exc.errors(), "body": body.decode()})
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logging.error(f"Unhandled exception: {exc}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+# --- BASIC ROUTES ---
+@app.get("/")
+def root():
+    return {"status": "running", "message": "MT5 Manager API active"}
+
+# --- RUN SERVER ---
+if __name__ == "__main__":
+    import uvicorn
+
+    load_dotenv()  # legge il file .env
+
+    HOST = os.getenv("API_HOST")  # default localhost
+    PORT = int(os.getenv("API_PORT"))    # default 8080
+
+    uvicorn.run("main:app", host=HOST, port=PORT, access_log=False)
+    # uvicorn.run("main:app", host=HOST, port=PORT,reload=True  )
+    

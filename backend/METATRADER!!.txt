@@ -1,0 +1,72 @@
+per i miei test:
+sono da lanciare da C:\Users\crist\mt5Manager_BE\mt5_api !!
+nel main di mt5_api !
+
+
+python main.py "C:\Program Files\MetaTrader 5\terminal64.exe" 127.0.0.1:9000
+python main.py 127.0.0.1:9000
+master
+python main.py "C:\MT5_1\terminal64.exe" 127.0.0.1:9001
+(metaquotes-demo)
+slave
+ 
+
+
+MASTER
+Name     : william rambaldi
+Type     : Forex Hedged EUR
+Server   : MetaQuotes-Demo
+
+Login    : 5041922476
+Password : Zh@1TcKl
+Investor : JoIaT@3x
+
+MASTER (trader)
+Name     : ROBERTO DISCALZO
+Type     : Forex Hedged EUR
+Server   : VTMarkets-Live 2
+
+Login    : 19148641
+Password : Qpnldan1@1
+Investor : JoIaT@3x
+
+
+SLAVE
+
+MetaQuotes-Demo
+Login:10008241916
+Password: OmOy*zJ8
+
+x back-end
+python main.py
+
+senza costraint sul nome
+CREATE TABLE `servers2` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user` varchar(100) NOT NULL,
+  `pwd` varchar(255) NOT NULL,
+  `server` varchar(100) NOT NULL,
+  `platform` enum('MT4','MT5') NOT NULL,
+  `ip` varchar(50) NOT NULL,
+  `port` int NOT NULL,
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `path` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_platform` (`platform`),
+  KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+Esempio di impatto di SL :
+
+Risultato
+
+Prezzo d’ingresso: 1.2000
+SL a 100 pips: 1.1900
+SL a 1000 pips (BUY): 1.1000
+
+tenere Sl mediamente a 100 pips
+
+PYTHON 3.11 !

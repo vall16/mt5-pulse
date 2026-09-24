@@ -1,0 +1,199 @@
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>Trading Servers</h1>
+    <hr />
+  </div>
+
+  <!-- LOADING / ERROR -->
+  <div *ngIf="loading" class="loading">Loading servers...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <!-- ADD SERVER -->
+  <div class="servers-header">
+    <button class="add-btn" (click)="toggleAddForm()">
+      {{ showAddForm ? '✖ Close' : '+ Add Server' }}
+    </button>
+  </div>
+
+  <div *ngIf="showAddForm" class="add-server-card animate-in">
+    <h3>Add New Server</h3>
+
+    <div class="form-grid">
+      <input type="text" placeholder="Server Name" [(ngModel)]="newServer.server">
+      <input type="text" placeholder="Server Alias" [(ngModel)]="newServer.server_alias">
+      <input type="text" placeholder="Platform" [(ngModel)]="newServer.platform">
+      <input type="text" placeholder="User" [(ngModel)]="newServer.user">
+      <input type="password" placeholder="Password" [(ngModel)]="newServer.pwd">
+      <input type="text" placeholder="IP Address" [(ngModel)]="newServer.ip">
+      <input type="text" placeholder="Path" [(ngModel)]="newServer.path">
+      <input type="number" placeholder="Port" [(ngModel)]="newServer.port">
+      <label class="chk">
+        <input type="checkbox" [(ngModel)]="newServer.is_active"> Active
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button class="save-btn" (click)="addServer()">💾 Save</button>
+      <button class="cancel-btn" (click)="toggleAddForm()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div *ngIf="!loading && servers.length > 0" class="servers-grid-container">
+
+    <!-- HEADER GRID -->
+    <div class="grid-header">
+      <div class="grid-cell"></div>
+      <div class="grid-cell">Server</div>
+      <div class="grid-cell">Alias</div>
+      <div class="grid-cell">Platform</div>
+      <div class="grid-cell">User</div>
+      <div class="grid-cell">Password</div>
+      <div class="grid-cell">IP</div>
+      <div class="grid-cell">Port</div>
+      <div class="grid-cell">Path</div>
+      <div class="grid-cell">Status</div>
+      <div class="grid-cell">Runtime</div>
+      <div class="grid-cell">Actions</div>
+    </div>
+
+    <!-- BODY GRID -->
+    <div class="grid-body" cdkDropList (cdkDropListDropped)="onDrop($event)">
+      <div *ngFor="let server of servers; let i = index"
+           class="grid-row"
+           [class.editing-row]="editingIndex === i"
+           cdkDrag
+           [cdkDragDisabled]="editingIndex === i">
+
+        <!-- DRAG HANDLE -->
+        <div class="grid-cell drag-handle-cell">
+          <div class="drag-handle" cdkDragHandle title="Trascina per riordinare">⠿</div>
+        </div>
+
+        <!-- SERVER -->
+        <div class="grid-cell" [title]="server.server">
+          <ng-container *ngIf="editingIndex !== i">{{ server.server || '—' }}</ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input class="edit-input" [(ngModel)]="server.server">
+          </ng-container>
+        </div>
+
+        <!-- ALIAS (EDIT) -->
+        <div class="grid-cell" [title]="server.server_alias">
+          <ng-container *ngIf="editingIndex !== i">
+            <b>{{ server.server_alias || '—' }}</b>
+          </ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input class="edit-input" [(ngModel)]="server.server_alias">
+          </ng-container>
+        </div>
+
+        <!-- PLATFORM -->
+        <div class="grid-cell">{{ server.platform || '—' }}</div>
+
+        <!-- USER -->
+        <div class="grid-cell">
+          <ng-container *ngIf="editingIndex !== i">{{ server.user || '—' }}</ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input class="edit-input" [(ngModel)]="server.user">
+          </ng-container>
+        </div>
+
+        <!-- PASSWORD -->
+        <div class="grid-cell">
+          <ng-container *ngIf="editingIndex !== i">
+            {{ server.pwd ? '••••••••' : '—' }}
+          </ng-container>
+
+          
+          <ng-container *ngIf="editingIndex === i">
+            <input type="password" class="edit-input" [(ngModel)]="server.pwd">
+          </ng-container>
+        </div>
+
+        <!-- IP -->
+        <div class="grid-cell">
+          <ng-container *ngIf="editingIndex !== i">{{ server.ip || '—' }}</ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input class="edit-input" [(ngModel)]="server.ip">
+          </ng-container>
+        </div>
+
+        <!-- PORT -->
+        <div class="grid-cell">
+          <ng-container *ngIf="editingIndex !== i">{{ server.port || '—' }}</ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input type="number" class="edit-input" [(ngModel)]="server.port">
+          </ng-container>
+        </div>
+
+        <!-- PATH -->
+        <div class="grid-cell" [title]="server.path">
+          <ng-container *ngIf="editingIndex !== i">{{ server.path || '—' }}</ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <input class="edit-input" [(ngModel)]="server.path">
+          </ng-container>
+        </div>
+
+        <!-- STATUS -->
+        <div class="grid-cell">
+          <ng-container *ngIf="editingIndex !== i">
+            <span class="status-badge"
+                  [class.active]="server.is_active"
+                  [class.inactive]="!server.is_active">
+              {{ server.is_active ? 'Enabled' : 'Disabled' }}
+            </span>
+          </ng-container>
+          <ng-container *ngIf="editingIndex === i">
+            <label class="chk">
+              <input type="checkbox" [(ngModel)]="server.is_active"> Active
+            </label>
+          </ng-container>
+        </div>
+
+        <!-- RUNTIME -->
+        <div class="grid-cell">
+          <span class="runtime-badge"
+                [class.online]="server.runtimeStatus === 'online'"
+                [class.offline]="server.runtimeStatus === 'offline'"
+                [class.unknown]="!server.runtimeStatus">
+            {{ server.runtimeStatus ? (server.runtimeStatus | uppercase) : '—' }}
+          </span>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="grid-cell actions">
+          <ng-container *ngIf="editingIndex !== i">
+            <button class="action-btn edit" (click)="startEdit(i)">✏️ Edit</button>
+            <button class="action-btn delete" (click)="deleteServer(server)">Delete</button>
+            <button class="action-btn test"
+                    (click)="checkServer(i)"
+                    [disabled]="testingIndex === i">
+              Test
+            </button>
+            <button class="action-btn start"
+                    (click)="startServer(server, i)"
+                    [disabled]="startingIndex === i">
+              ▶️ Start
+            </button>
+          </ng-container>
+
+          <!-- EDIT MODE -->
+          <ng-container *ngIf="editingIndex === i">
+            <button class="action-btn save" (click)="saveEdit(server)">💾 Save</button>
+            <button class="action-btn cancel" (click)="cancelEdit()">✖ Cancel</button>
+          </ng-container>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- EMPTY -->
+  <div *ngIf="!loading && servers.length === 0 && !error" class="empty-state">
+    No servers found
+  </div>
+
+</div>

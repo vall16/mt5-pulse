@@ -1,0 +1,312 @@
+<div class="backtest-container">
+  <div class="header">
+    <h1>Backtest</h1>
+    <p class="subtitle">Test strategies on historical data</p>
+  </div>
+
+  <div class="config-card">
+    <div class="config-grid">
+      <div class="form-group">
+        <label>Trader</label>
+        <select [(ngModel)]="selectedTraderId" class="form-control">
+          <option [ngValue]="null" disabled>Seleziona trader...</option>
+          <option *ngFor="let t of traders" [ngValue]="t.id">{{ t.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Strategy</label>
+        <select [(ngModel)]="strategy" class="form-control">
+          <option *ngFor="let s of strategies" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Symbol</label>
+        <select [(ngModel)]="symbol" class="form-control">
+          <option *ngFor="let s of symbols" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Days</label>
+        <input type="number" [(ngModel)]="days" min="1" max="365" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Lot</label>
+        <input type="number" [(ngModel)]="lot" min="0.01" step="0.01" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Balance ($)</label>
+        <input type="number" [(ngModel)]="balance" min="100" step="100" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label>Direction</label>
+        <select [(ngModel)]="direction" class="form-control">
+          <option value="both">Buy & Sell</option>
+          <option value="buy">Buy only</option>
+          <option value="sell">Sell only</option>
+        </select>
+      </div>
+      <div class="form-group form-group-btn">
+        <button class="run-btn" (click)="runBacktest()" [disabled]="loading || !selectedTraderId" *ngIf="!loading">
+          Run Backtest
+        </button>
+        <button class="cancel-btn" (click)="cancelBacktest()" *ngIf="loading">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-box" *ngIf="error">{{ error }}</div>
+
+  <div class="mt5-info" *ngIf="mt5Url">
+    <span class="mt5-info-item"><strong>MT5:</strong> {{ mt5Url }}</span>
+    <span class="mt5-info-item"><strong>Account:</strong> {{ traderLogin }} ({{ traderServer }})</span>
+    <span class="mt5-info-item"><strong>Trader:</strong> {{ traderName }}</span>
+  </div>
+
+  <div class="loading-box" *ngIf="loading">
+    <div class="progress-container">
+      <div class="progress-bar" [style.width.%]="progress"></div>
+    </div>
+    <div class="progress-info">
+      <span>{{ progress }}%</span>
+      <span>Trades: {{ progressTrades }}</span>
+      <span>Balance: ${{ progressBalance | number:'1.2-2' }}</span>
+    </div>
+  </div>
+
+  <div class="results" *ngIf="result">
+    <div class="summary-cards">
+      <div class="summary-card">
+        <div class="summary-label">Total Trades</div>
+        <div class="summary-value">{{ result.summary.total_trades }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Win Rate</div>
+        <div class="summary-value">{{ result.summary.win_rate }}%</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Trades/Giorno</div>
+        <div class="summary-value">{{ result.summary.trades_per_day }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Net PnL</div>
+        <div class="summary-value" [class.positive]="result.summary.net_pnl >= 0" [class.negative]="result.summary.net_pnl < 0">
+          ${{ result.summary.net_pnl | number:'1.2-2' }}
+        </div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Return</div>
+        <div class="summary-value" [class.positive]="result.summary.return_pct >= 0" [class.negative]="result.summary.return_pct < 0">
+          {{ result.summary.return_pct }}%
+        </div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Max Drawdown</div>
+        <div class="summary-value negative">${{ result.summary.max_drawdown | number:'1.2-2' }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Win/Loss Ratio</div>
+        <div class="summary-value">{{ result.summary.win_loss_ratio }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Avg Win</div>
+        <div class="summary-value positive">${{ result.summary.avg_win | number:'1.2-2' }}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Avg Loss</div>
+        <div class="summary-value negative">${{ result.summary.avg_loss | number:'1.2-2' }}</div>
+      </div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-card">
+        <div class="detail-label">Strategy</div>
+        <div class="detail-value">{{ result.strategy }}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-label">Symbol</div>
+        <div class="detail-value">{{ result.symbol }}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-label">Period</div>
+        <div class="detail-value">{{ result.days }} days</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-label">Lot</div>
+        <div class="detail-value">{{ result.lot }}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-label">Start Balance</div>
+        <div class="detail-value">${{ result.initial_balance | number:'1.2-2' }}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-label">Final Balance</div>
+        <div class="detail-value" [class.positive]="result.summary.final_balance >= result.initial_balance" [class.negative]="result.summary.final_balance < result.initial_balance">
+          ${{ result.summary.final_balance | number:'1.2-2' }}
+        </div>
+      </div>
+    </div>
+
+    <div class="export-row">
+      <button class="export-btn" (click)="exportCsv()">Export CSV</button>
+      <button class="ai-btn" (click)="analyzeWithAI()" [disabled]="aiLoading" *ngIf="!aiAnalysis">
+        {{ aiLoading ? 'Analisi in corso...' : 'Analizza con AI' }}
+      </button>
+    </div>
+
+    <div class="ai-loading" *ngIf="aiLoading">
+      <div class="ai-spinner"></div>
+      <span>L'AI sta analizzando i risultati del backtest...</span>
+    </div>
+
+    <div class="ai-error" *ngIf="aiError">{{ aiError }}</div>
+
+    <div class="ai-analysis" *ngIf="aiAnalysis">
+      <h3>Analisi AI</h3>
+      <div class="ai-content">{{ aiAnalysis }}</div>
+    </div>
+
+    <div class="breakdowns" *ngIf="result.summary.by_session">
+      <div class="breakdown-section">
+        <h3>Per Sessione</h3>
+        <table class="breakdown-table">
+          <thead>
+            <tr><th>Sessione</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>PnL</th><th>Avg PnL</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let s of getSessionKeys()">
+              <td class="session-label">{{ s }} <span class="session-hours">({{ getSessionHours(s) }})</span></td>
+              <td>{{ result.summary.by_session[s].total }}</td>
+              <td class="positive">{{ result.summary.by_session[s].wins }}</td>
+              <td class="negative">{{ result.summary.by_session[s].losses }}</td>
+              <td [class.positive]="result.summary.by_session[s].win_rate >= 50" [class.negative]="result.summary.by_session[s].win_rate < 50">
+                {{ result.summary.by_session[s].win_rate }}%
+              </td>
+              <td [class.positive]="result.summary.by_session[s].pnl >= 0" [class.negative]="result.summary.by_session[s].pnl < 0">
+                ${{ result.summary.by_session[s].pnl | number:'1.2-2' }}
+              </td>
+              <td [class.positive]="result.summary.by_session[s].avg_pnl >= 0" [class.negative]="result.summary.by_session[s].avg_pnl < 0">
+                ${{ result.summary.by_session[s].avg_pnl | number:'1.2-2' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="breakdown-section">
+        <h3>Per Giorno</h3>
+        <table class="breakdown-table">
+          <thead>
+            <tr><th>Giorno</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>PnL</th><th>Avg PnL</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of getDayKeys()">
+              <td>{{ d }}</td>
+              <td>{{ result.summary.by_day[d].total }}</td>
+              <td class="positive">{{ result.summary.by_day[d].wins }}</td>
+              <td class="negative">{{ result.summary.by_day[d].losses }}</td>
+              <td [class.positive]="result.summary.by_day[d].win_rate >= 50" [class.negative]="result.summary.by_day[d].win_rate < 50">
+                {{ result.summary.by_day[d].win_rate }}%
+              </td>
+              <td [class.positive]="result.summary.by_day[d].pnl >= 0" [class.negative]="result.summary.by_day[d].pnl < 0">
+                ${{ result.summary.by_day[d].pnl | number:'1.2-2' }}
+              </td>
+              <td [class.positive]="result.summary.by_day[d].avg_pnl >= 0" [class.negative]="result.summary.by_day[d].avg_pnl < 0">
+                ${{ result.summary.by_day[d].avg_pnl | number:'1.2-2' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="breakdown-section">
+        <h3>Per Direzione</h3>
+        <table class="breakdown-table">
+          <thead>
+            <tr><th>Direzione</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>PnL</th><th>Avg PnL</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let d of ['BUY', 'SELL']">
+              <td>
+                <span class="trade-type" [ngClass]="d === 'BUY' ? 'type-buy' : 'type-sell'">{{ d }}</span>
+              </td>
+              <td>{{ result.summary.by_direction[d].total }}</td>
+              <td class="positive">{{ result.summary.by_direction[d].wins }}</td>
+              <td class="negative">{{ result.summary.by_direction[d].losses }}</td>
+              <td [class.positive]="result.summary.by_direction[d].win_rate >= 50" [class.negative]="result.summary.by_direction[d].win_rate < 50">
+                {{ result.summary.by_direction[d].win_rate }}%
+              </td>
+              <td [class.positive]="result.summary.by_direction[d].pnl >= 0" [class.negative]="result.summary.by_direction[d].pnl < 0">
+                ${{ result.summary.by_direction[d].pnl | number:'1.2-2' }}
+              </td>
+              <td [class.positive]="result.summary.by_direction[d].avg_pnl >= 0" [class.negative]="result.summary.by_direction[d].avg_pnl < 0">
+                ${{ result.summary.by_direction[d].avg_pnl | number:'1.2-2' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="breakdown-section">
+        <h3>Per Ora (migliori)</h3>
+        <table class="breakdown-table">
+          <thead>
+            <tr><th>Ora</th><th>Trades</th><th>Wins</th><th>Win Rate</th><th>PnL</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let h of getTopHours()">
+              <td>{{ h }}:00</td>
+              <td>{{ result.summary.by_hour[h].total }}</td>
+              <td class="positive">{{ result.summary.by_hour[h].wins }}</td>
+              <td [class.positive]="result.summary.by_hour[h].win_rate >= 50" [class.negative]="result.summary.by_hour[h].win_rate < 50">
+                {{ result.summary.by_hour[h].win_rate }}%
+              </td>
+              <td [class.positive]="result.summary.by_hour[h].pnl >= 0" [class.negative]="result.summary.by_hour[h].pnl < 0">
+                ${{ result.summary.by_hour[h].pnl | number:'1.2-2' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="trades-table-container" *ngIf="result.trades.length > 0">
+      <div class="trades-header">
+        <h2>Trades (last 50)</h2>
+      </div>
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Type</th>
+            <th>Exit</th>
+            <th>PnL</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let t of result.trades">
+            <td class="date-cell">{{ t.time }}</td>
+            <td>
+              <span class="trade-type" [ngClass]="t.type === 'BUY' ? 'type-buy' : 'type-sell'">
+                {{ t.type }}
+              </span>
+            </td>
+            <td>
+              <span class="trade-exit" [ngClass]="{
+                'exit-tp': t.exit === 'TP',
+                'exit-sl': t.exit === 'SL',
+                'exit-hold': t.exit === 'HOLD_EXIT'
+              }">{{ t.exit }}</span>
+            </td>
+            <td [class.positive]="t.pnl >= 0" [class.negative]="t.pnl < 0">
+              {{ t.pnl >= 0 ? '+' : '' }}{{ t.pnl | number:'1.2-2' }}
+            </td>
+            <td>{{ t.balance | number:'1.2-2' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

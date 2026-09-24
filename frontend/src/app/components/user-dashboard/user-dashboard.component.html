@@ -1,0 +1,602 @@
+<div class="user-dashboard">
+  <div class="dashboard-header">
+    <div class="user-info">
+      <div class="user-avatar">
+        {{ (authService.currentUserValue?.username || '?').charAt(0).toUpperCase() }}
+      </div>
+      <div class="user-details">
+        <h2>Welcome, {{ authService.currentUserValue?.username }}</h2>
+        <p class="user-email">Manage your MT5 trading accounts</p>
+      </div>
+    </div>
+    <button class="logout-button" (click)="logout()">
+      <span>Logout</span>
+    </button>
+  </div>
+
+  <div class="error-banner" *ngIf="errorMessage">
+    <span class="error-icon">⚠</span>
+    <span>{{ errorMessage }}</span>
+    <button class="error-close" (click)="errorMessage = ''">✕</button>
+  </div>
+
+  <div class="loading-overlay" *ngIf="loading">
+    <div class="spinner"></div>
+    <span>Caricamento dati...</span>
+  </div>
+
+  <div class="supervisor-section" *ngIf="!loading">
+    <div class="section-header">
+      <h3>AI Strategy Supervisor</h3>
+      <div class="header-buttons">
+        <span class="supervisor-status-badge" [class.running]="supervisorStatus?.running"
+              [class.stopped]="!supervisorStatus?.running">
+          <span class="status-dot"></span>
+          {{ supervisorStatus?.running ? 'Running' : 'Stopped' }}
+        </span>
+        <button class="supervisor-toggle-btn" (click)="loadSupervisorStatus()" [disabled]="supervisorLoading"
+                title="Ricarica i trader attivi gestiti">
+          &#8635; Refresh
+        </button>
+        <button class="add-server-btn" (click)="runSupervisorNow()" [disabled]="supervisorLoading">
+          <span *ngIf="!supervisorLoading">&#9889; Run Now</span>
+          <span *ngIf="supervisorLoading">Analisi...</span>
+        </button>
+        <button class="supervisor-toggle-btn" (click)="toggleSupervisor()">
+          {{ supervisorStatus?.running ? 'Stop' : 'Start' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="supervisor-card">
+      <div class="supervisor-controls">
+        <label class="supervisor-label">
+          Intervallo (sec)
+          <input type="number" min="60" [(ngModel)]="supervisorInterval" class="supervisor-input" />
+        </label>
+        <label class="supervisor-label">
+          Modello LLM
+          <input type="text" [(ngModel)]="supervisorModel" class="supervisor-input" />
+        </label>
+        <button class="supervisor-toggle-btn" (click)="saveSupervisorConfig()">Salva config</button>
+      </div>
+
+      <div class="supervisor-meta" *ngIf="supervisorStatus">
+        <span>Ultima analisi: {{ supervisorStatus.last_run || 'mai eseguita' }}</span>
+        <span *ngIf="supervisorStatus.llm_used === true">LLM: OpenRouter</span>
+        <span *ngIf="supervisorStatus.llm_used === false" class="safety-note">Solo regole di sicurezza</span>
+        <span *ngIf="supervisorStatus.last_error" class="supervisor-error">Error: {{ supervisorStatus.last_error }}</span>
+      </div>
+
+      <div class="supervisor-reasoning" *ngIf="supervisorStatus?.reasoning">
+        <strong>Ragionamento AI:</strong> {{ supervisorStatus.reasoning }}
+      </div>
+
+      <div class="supervisor-managed" *ngIf="supervisorStatus?.managed_traders?.length">
+        <div class="managed-title">Trader gestiti ({{ supervisorStatus.managed_traders.length }})</div>
+        <table class="supervisor-table managed-table">
+          <thead>
+            <tr>
+              <th>Trader</th>
+              <th>Strategia</th>
+              <th>Simbolo</th>
+              <th>Intervallo</th>
+              <th>Stato</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of supervisorStatus.managed_traders">
+              <td>{{ t.name }}</td>
+              <td>{{ t.strategy }}</td>
+              <td>{{ t.symbol }}</td>
+              <td>{{ t.interval }} min</td>
+              <td>
+                <span class="managed-status" [class.running]="t.current_status === 'RUNNING'"
+                      [class.stopped]="t.current_status === 'STOPPED'">
+                  <span class="status-dot"></span> {{ t.current_status }}
+                </span>
+              </td>
+              <td>
+                <button *ngIf="t.current_status === 'RUNNING'"
+                        class="apply-btn apply-pause"
+                        (click)="applySupervisor(t, 'PAUSE')"
+                        [disabled]="supervisorApplying[t.trader_id]">
+                  {{ supervisorApplying[t.trader_id] ? '...' : 'Pausa' }}
+                </button>
+                <span *ngIf="t.current_status !== 'RUNNING'" class="managed-idle">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="supervisor-table-wrap" *ngIf="supervisorStatus?.recommendations?.length">
+        <table class="supervisor-table">
+          <thead>
+            <tr>
+              <th>Trader</th>
+              <th>Strategia</th>
+              <th>Simbolo</th>
+              <th>Stato</th>
+              <th>Mercato</th>
+              <th>Perf (WR / P&L)</th>
+              <th>Raccomandazione</th>
+              <th>Conf</th>
+              <th>Motivo</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let rec of supervisorStatus.recommendations">
+              <td>{{ rec.name }}</td>
+              <td>{{ rec.strategy }}</td>
+              <td>{{ rec.symbol }}</td>
+              <td>{{ rec.current_status }}</td>
+              <td>
+                {{ rec.market?.regime || '-' }} / ATR {{ rec.market?.atr_m5 != null ? rec.market.atr_m5 : '-' }}
+                <span *ngIf="rec.market?.ok === false" class="supervisor-error" [title]="rec.market?.error">!</span>
+              </td>
+              <td>{{ rec.performance?.win_rate != null ? rec.performance.win_rate + '%' : '-' }} /
+                  ${{ rec.performance?.net_profit_30 ?? 0 }}</td>
+              <td>
+                <span class="rec-badge"
+                      [class.active]="rec.recommended_action === 'ACTIVE'"
+                      [class.pause]="rec.recommended_action === 'PAUSE'"
+                      [class.watch]="rec.recommended_action === 'WATCH'">
+                  {{ rec.recommended_action }}
+                </span>
+                <span *ngIf="rec.safety_override" class="safety-flag" title="Imposta dalle regole di sicurezza">S</span>
+              </td>
+              <td>{{ (rec.confidence * 100) | number:'1.0-0' }}%</td>
+              <td class="rec-reason">{{ rec.reason }}</td>
+              <td>
+                <button *ngIf="rec.current_status === 'STOPPED' && rec.recommended_action !== 'PAUSE'"
+                        class="apply-btn apply-active"
+                        (click)="applySupervisor(rec, 'ACTIVE')"
+                        [disabled]="supervisorApplying[rec.trader_id]">
+                  {{ supervisorApplying[rec.trader_id] ? '...' : 'Attiva' }}
+                </button>
+                <button *ngIf="rec.current_status === 'RUNNING'"
+                        class="apply-btn apply-pause"
+                        (click)="applySupervisor(rec, 'PAUSE')"
+                        [disabled]="supervisorApplying[rec.trader_id]">
+                  {{ supervisorApplying[rec.trader_id] ? '...' : 'Pausa' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="supervisor-empty" *ngIf="!supervisorStatus?.recommendations?.length">
+        Nessuna raccomandazione disponibile. Avvia il supervisore o premi "Run Now".
+      </div>
+    </div>
+  </div>
+
+  <div class="traders-section" *ngIf="!loading">
+    <div class="section-header">
+      <h3>My Traders</h3>
+      
+      <div class="header-buttons">
+        <button class="add-server-btn" (click)="openServersList()">
+       
+          <span class="plus-icon">+</span>
+          <span>Add Server</span>
+
+        </button>
+
+        
+      </div>
+
+        </div>
+
+    <div class="traders-grid" cdkDropList (cdkDropListDropped)="onDrop($event)">
+      <div class="trader-card" *ngFor="let trader of traders" cdkDrag>
+
+        <div class="card-left">
+          <div class="card-header">
+            <div class="drag-handle" cdkDragHandle>⠿</div>
+            <div class="trader-info">
+              <h4>{{ trader.name }}</h4>
+              <div class="status-row">
+                <span class="trader-status" [class.active]="trader.status === 'active'" [class.inactive]="trader.status === 'inactive'">
+                  {{ trader.status }}
+                </span>
+                <span class="mt5-status" [class.connected]="isTraderConnected(trader)" [class.disconnected]="!isTraderConnected(trader)"
+                      [title]="isTraderConnected(trader) ? 'MT5 connected' : 'MT5 disconnected'">
+                  <span class="mt5-dot"></span>
+                  {{ isTraderConnected(trader) ? 'MT5 Online' : 'MT5 Offline' }}
+                </span>
+              </div>
+            </div>
+            <button class="delete-btn" (click)="deleteTrader(trader)">✕</button>
+
+          </div>
+
+      <div class="card-body">
+      <div class="detail-row">
+        <span class="label">Created:</span>
+        <span class="value">{{ trader.created_at | date:'short' }}</span>
+      </div>
+      <div class="master-slave-section">
+        <div class="server-card master-card">
+          <h5>Master Server <span class="disabled-tag" title="Copytrading disabilitato: lavori solo sullo slave">disabilitato</span></h5>
+          <select [(ngModel)]="trader.master_server_id" disabled>
+            <option *ngFor="let server of servers" [ngValue]="server.id">{{ server.server_alias }}</option>
+          </select>
+        </div>
+        <div class="server-card slave-card">
+          <h5>Slave Server</h5>
+          <select [(ngModel)]="trader.slave_server_id">
+            <option *ngFor="let server of servers" [ngValue]="server.id">{{ server.server_alias }}</option>
+          </select>
+        </div>
+        </div>
+
+      <!-- Trading parameters -->
+      
+      <div class="trading-params-section">
+        <div class="param-card param-sl">
+          <h6>SL (Stop Loss)</h6>
+          <input type="number" [(ngModel)]="trader.sl" placeholder="Stop Loss" />
+        </div> 
+
+        <div class="param-card param-tp">
+          <h6>TP (Take Profit)</h6>
+          <input type="number" [(ngModel)]="trader.tp" placeholder="Take Profit" />
+        </div>
+
+        <div class="param-card param-tsl">
+          <h6>TSL (Trailing Stop Loss)</h6>
+          <input type="number" [(ngModel)]="trader.tsl" placeholder="Trailing Stop Loss" />
+        </div>
+
+        <div class="param-card param-mult">
+          <h6>FIX LOT</h6>
+          <input type="number" [(ngModel)]="trader.fix_lot" placeholder="Fix Lot" />
+        </div>
+      </div>
+
+      <div class="profit-tp-row">
+        <label class="checkbox-label">
+          <input type="checkbox" [(ngModel)]="trader.use_signal_sl_tp" />
+          📐 Forza SL/TP del form
+        </label>
+      </div>
+      </div>
+
+      <div class="save-section">
+        <button class="action-btn save-btn" (click)="saveTrader(trader)">💾 Salva Server + SL/TP</button>
+      </div>
+
+        </div>
+      <div class="card-actions">
+
+          <div class="analyze-section">
+            <button class="action-btn primary" (click)="openAnalyze(trader)" [disabled]="trader.analyzing">
+              <ng-container *ngIf="!trader.analyzing">🧠 Analyze</ng-container>
+              <ng-container *ngIf="trader.analyzing"><span class="button-spinner"></span> Analyzing...</ng-container>
+            </button>
+            <div class="analyze-controls">
+              <select [(ngModel)]="analyzeSource" class="signal-select">
+                <option value="mt5">MT5</option>
+                <option value="db">Database</option>
+              </select>
+              <label class="analyze-label">Giorni</label>
+              <input type="number" [(ngModel)]="analyzeDays" min="1" max="365" class="interval-input" />
+            </div>
+          </div>
+          
+          <div class="card-actions">
+  
+
+  <!-- Sezione Copy + Auto Copy unificata -->
+  <div class="copy-section">
+    <div class="copy-disabled-block">
+      <h5>Trade Replication <span class="disabled-tag">disabilitato</span></h5>
+      <div class="copy-controls">
+      <button
+        class="action-btn primary"
+        (click)="copyOrders(trader)"
+        disabled
+      >
+        <ng-container *ngIf="!trader.copying">
+          📤 Copy Orders
+        </ng-container>
+        <ng-container *ngIf="trader.copying">
+          <span class="button-spinner"></span> Copying...
+        </ng-container>
+      </button>
+      <div class="auto-copy-controls">
+        <label class="input-label">Copy frequency (seconds)</label>
+        <input
+          type="number"
+          min="1"
+          required
+          [(ngModel)]="trader.copyInterval"
+          #intervalCtrl="ngModel"
+          placeholder="e.g. 30"
+          class="interval-input"
+          disabled
+        />
+        <div class="error small-error" *ngIf="intervalCtrl.invalid && intervalCtrl.touched">
+          Inserisci un numero valido (≥ 1 secondo)
+        </div>
+
+        <button
+          class="action-btn tertiary"
+          disabled
+          (click)="toggleAutoCopy(trader)"
+        >
+          {{ trader.autoCopying ? '⏹ Stop Auto Copy' : '🔁 Start Auto Copy' }}
+        </button>
+
+        <!-- ============================ -->
+        <!-- NUOVO PULSANTE LISTEN + SIGNAL 
+        <!-- ============================ -->
+        
+      </div>
+      </div>
+    </div>
+
+      <!-- Divider -->
+      <hr class="section-divider" />
+
+      <h5>Custom Signal</h5>
+      <div class="copy-controls">
+        <!-- Pulsante Listen uguale a Copy Orders -->
+          <button
+            class="action-btn primary"
+            (click)="startListeningForBuy(trader)"
+            [class.active]="trader.custom_signal_interval"
+          >
+            {{ trader.listening ? '🔊 Listening...' : 'Listen' }}
+          </button>
+
+          <!-- SIGNAL SELECT -->
+          
+            <!-- <select
+              [(ngModel)]="trader.selectedSignal"
+              class="signal-select"
+            >
+            <option value="XAUUSD_BASE">SIGNAL: XAUUSD Base</option>
+            <option value="XAUUSD_TREND_GUARD">SIGNAL: XAUUSD Trend Guard</option>
+            <option value="XAUUSD_VOLATILITY">SIGNAL: XAUUSD Volatility</option>
+            <option value="XAUUSD_SCALP">SIGNAL: XAUUSD Scalp</option>
+
+
+            </select> -->
+
+            <select
+              [(ngModel)]="trader.selected_signal"
+              class="signal-select"
+            >
+              <option
+                *ngFor="let signal of availableSignals"
+                [value]="signal.value"
+              >
+                SIGNAL: {{ signal.label }}
+              </option>
+            </select>
+
+            <select [(ngModel)]="trader.direction_filter" class="signal-select">
+              <option value="both">Buy & Sell</option>
+              <option value="buy">Buy only</option>
+              <option value="sell">Sell only</option>
+            </select>
+
+            <div class="sessions-dropdown-container">
+              <button class="sessions-dropdown-btn" (click)="toggleSessionsDropdown(trader.id)" (blur)="closeSessionsDropdown(trader.id)">
+                {{ getSessionsLabel(trader) }} ▾
+              </button>
+              <div class="sessions-dropdown-menu" *ngIf="sessionsDropdownOpen[trader.id]">
+                <label *ngFor="let s of availableSessions" class="sessions-dropdown-item" (mousedown)="$event.preventDefault(); toggleSession(trader, s.value)">
+                  <input type="checkbox" [checked]="isSessionSelected(trader, s.value)" (change)="$event.stopPropagation()" />
+                  <span class="session-item-label">{{ s.label }}</span>
+                  <span class="session-item-hours">{{ s.hours }}</span>
+                </label>
+              </div>
+            </div>
+
+          
+
+
+          <div class="auto-copy-controls">
+            <label class="input-label">Interval (sec)</label>
+            <input
+              type="number"
+              min="1"
+              required
+              [(ngModel)]="trader.custom_signal_interval"
+              #intervalCtrl2="ngModel"
+              class="interval-input"
+              placeholder="e.g. 5"
+            />
+            <div></div>
+            <label class="input-label">Symbol:</label>
+            <ng-container *ngIf="trader.id != null">
+
+
+              <select [(ngModel)]="trader.selected_symbol" class="interval-select" (click)="onSlaveSelected(trader)"   >
+                
+                <option *ngFor="let sym of slaveSymbols[trader.id] || []" [value]="sym.symbol">{{ sym.symbol }}</option>
+              </select>
+              
+            </ng-container>  
+
+            <div class="error small-error" *ngIf="intervalCtrl2.invalid && intervalCtrl2.touched">
+              Inserisci un numero valido (≥ 1 secondo)
+            </div>
+          </div>
+
+          <div class="profit-tp-row">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="trader.use_profit_tp" />
+              Close at profit
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              [(ngModel)]="trader.profit_tp_value"
+              class="interval-input"
+              placeholder="e.g. 3.0"
+              [disabled]="!trader.use_profit_tp"
+            />
+            <span class="profit-tp-unit">$</span>
+          </div>
+
+          <div class="profit-tp-row">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="trader.block_night_trading" />
+              🌙 Blocco notturno (00:00-05:00)
+            </label>
+          </div>
+
+          <div class="profit-tp-row">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="trader.adaptive_enabled"
+                     (change)="toggleAdaptive(trader)" />
+              🧬 Adaptive SL/TP
+            </label>
+          </div>
+      </div>
+        
+    
+  </div>
+
+  
+  <!-- Log sezione -->
+  <div class="log-container" *ngIf="trader.logs?.length">
+    <h5>Execution Log</h5>
+    <div class="log-box">
+      <div *ngFor="let line of trader.logs">{{ line }}</div>
+    </div>
+  </div>
+</div>
+</div>
+      <div class="empty-state" *ngIf="traders.length === 0">
+        <div class="empty-icon">📊</div>
+        <h3>No traders yet</h3>
+        <p>Click the "Add Trader" button to create your first MT5 trading account</p>
+      </div>
+    </div>
+
+      <!-- Add New Trader — sotto la griglia -->
+      <div class="add-trader-card">
+        <div class="card-header">
+          <h4>Add New Trader</h4>
+        </div>
+
+        <div class="card-body">
+          <div class="detail-row">
+            <span class="label">Name:</span>
+            <input type="text" [(ngModel)]="newTrader.name" placeholder="Trader Name" />
+          </div>
+          <div class="detail-row">
+            <span class="label">Master Server:</span>
+            <select [(ngModel)]="newTrader.master_server_id">
+              <option *ngFor="let server of servers" [value]="server.id">{{ server.server_alias }}</option>
+            </select>
+          </div>
+          <div class="detail-row">
+            <span class="label">Slave Server:</span>
+            <select [(ngModel)]="newTrader.slave_server_id">
+              <option *ngFor="let server of servers" [value]="server.id">{{ server.server_alias }}</option>
+            </select>
+          </div>
+          <div class="detail-row">
+            <span class="label">SL:</span>
+            <input type="number" [(ngModel)]="newTrader.sl" placeholder="Stop Loss in Pip" />
+          </div>
+          <div class="detail-row">
+            <span class="label">TP:</span>
+            <input type="number" [(ngModel)]="newTrader.tp" placeholder="Take Profit" />
+          </div>
+          <div class="detail-row">
+            <span class="label">TSL:</span>
+            <input type="number" [(ngModel)]="newTrader.tsl" placeholder="Trailing SL" />
+          </div>
+          <div class="detail-row">
+            <span class="label">Multiplier:</span>
+            <input type="number" [(ngModel)]="newTrader.moltiplicatore" placeholder="Multiplier" />
+          </div>
+          <div class="detail-row">
+            <span class="label">Fixed Lot:</span>
+            <input type="number" [(ngModel)]="newTrader.fix_lot" placeholder="Fixed Lot" />
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button class="action-btn primary" (click)="addTrader()">Add Trader</button>
+        </div>
+      </div>
+
+  </div>
+</div>
+
+<div class="modal-overlay" *ngIf="showAddModal" (click)="closeAddModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <!-- <app-add-trader-modal (traderAdded)="onTraderAdded()" (cancel)="closeAddModal()"></app-add-trader-modal> -->
+    <app-add-trader-modal></app-add-trader-modal>
+  </div>
+</div>
+<div class="modal-overlay" *ngIf="showServersList" (click)="closeServersList()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <!-- <app-servers-list (traderAdded)="onTraderAdded()" (cancel)="closeAddModal()"></app-servers-list> -->
+     <app-servers-list></app-servers-list>
+  </div>
+</div>
+
+<div class="modal-overlay" *ngIf="showAnalyzeModal" (click)="closeAnalyze()">
+  <div class="modal-content analyze-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>🧠 AI Analysis — {{ analyzeTraderName }}</h3>
+      <span *ngIf="analyzeResult && analyzeResult.slave_ip" style="font-size:0.8rem; color:#666;">
+        Slave: {{ analyzeResult.slave_ip }}:{{ analyzeResult.slave_port }}
+        <span *ngIf="analyzeResult.mt5_login"> | Account: {{ analyzeResult.mt5_login }} ({{ analyzeResult.mt5_server }})</span>
+      </span>
+      <button class="delete-btn" (click)="closeAnalyze()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div *ngIf="analyzeLoading" class="analyze-loading">
+        <span class="button-spinner"></span>
+        <p>Analisi in corso... L'AI sta studiando i tuoi trade</p>
+      </div>
+      <div *ngIf="analyzeError" class="analyze-error">
+        <p>{{ analyzeError }}</p>
+      </div>
+      <div *ngIf="analyzeResult && !analyzeLoading">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-value">{{ analyzeResult.metrics.win_rate }}%</span>
+            <span class="metric-label">Win Rate</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value">${{ analyzeResult.metrics.total_profit }}</span>
+            <span class="metric-label">Profitto Totale</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value">{{ analyzeResult.metrics.total_trades }}</span>
+            <span class="metric-label">Trade Totali</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value">${{ analyzeResult.metrics.expectancy }}</span>
+            <span class="metric-label">Expectancy</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value">{{ analyzeResult.metrics.recent_win_rate }}%</span>
+            <span class="metric-label">Win Rate (ultimi 20)</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-value">${{ analyzeResult.metrics.max_drawdown }}</span>
+            <span class="metric-label">Max Drawdown</span>
+          </div>
+        </div>
+        <div class="analysis-text">{{ analyzeResult.analysis }}</div>
+      </div>
+    </div>
+  </div>
+</div>

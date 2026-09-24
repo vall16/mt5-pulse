@@ -1,0 +1,19 @@
+<div class="app-container">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <h1>MT5 Pulse</h1>
+    </div>
+    <div class="nav-links">
+      <a routerLink="/history" routerLinkActive="active" class="nav-link">History</a>
+      <a routerLink="/backtest" routerLinkActive="active" class="nav-link">Backtest</a>
+      <a routerLink="/signal-research" routerLinkActive="active" class="nav-link">Signal Research</a>
+      <a routerLink="/signal-research-auto" routerLinkActive="active" class="nav-link">Auto Signal</a>
+      <a routerLink="/strategies-guide" routerLinkActive="active" class="nav-link">Strategie</a>
+      <a routerLink="/user-dashboard" routerLinkActive="active" class="nav-link">Traders & Servers</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

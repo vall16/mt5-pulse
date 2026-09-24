@@ -1,0 +1,67 @@
+<div class="strategies-page">
+  <header class="page-header">
+    <h1>📖 Guida alle Strategie</h1>
+    <p class="subtitle">Descrizione, configurazione consigliata e tips per ogni strategia disponibile</p>
+  </header>
+
+  <div class="news-filter-banner">
+    <span class="banner-icon">📰</span>
+    <div>
+      <strong>News Filter attivo</strong>
+      <p>Tutte le strategie sono protette dal News Filter: il trading viene automaticamente sospeso ±30 min dagli eventi ad alto impatto (NFP, FOMC, CPI, ECB) letti dal calendario economico MT5. Nessun intervento manuale richiesto.</p>
+    </div>
+  </div>
+
+  <div class="strategies-grid">
+    <article class="strategy-card" *ngFor="let s of strategies">
+      <div class="card-header">
+        <h2 class="strategy-title">{{ s.title }}</h2>
+        <span class="risk-badge" [ngClass]="riskColors[s.riskLevel]">{{ s.riskLevel }}</span>
+      </div>
+
+      <p class="description">{{ s.description }}</p>
+
+      <div class="tags">
+        <span class="tag" *ngFor="let t of s.tags">{{ t }}</span>
+      </div>
+
+      <div class="config-grid">
+        <div class="config-item">
+          <span class="config-label">📊 Simboli</span>
+          <span class="config-value">{{ s.symbols.join(', ') }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">⏱ Timeframe</span>
+          <span class="config-value">{{ s.timeframe }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">🔄 Polling</span>
+          <span class="config-value">{{ s.polling }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">🛡 SL</span>
+          <span class="config-value">{{ s.slRange }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">🎯 TP</span>
+          <span class="config-value">{{ s.tpRange }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">🕐 Sessione</span>
+          <span class="config-value">{{ s.bestSession }}</span>
+        </div>
+        <div class="config-item">
+          <span class="config-label">📈 Frequenza</span>
+          <span class="config-value">{{ s.frequency }}</span>
+        </div>
+      </div>
+
+      <div class="tips-section">
+        <h3>💡 Tips</h3>
+        <ul class="tips-list">
+          <li *ngFor="let tip of s.tips">{{ tip }}</li>
+        </ul>
+      </div>
+    </article>
+  </div>
+</div>

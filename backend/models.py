@@ -1,0 +1,168 @@
+from datetime import datetime
+from pydantic import BaseModel
+from typing import List, Literal, Optional
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    user: UserResponse | None = None
+    message: str | None = None
+
+class ServerResponse(BaseModel):
+    id: int
+    user: str
+    pwd: str
+    server: str
+    server_alias: Optional[str] = None 
+    platform: str
+    ip: str
+    path: Optional[str] = None   # 👈 cambia qui
+    port: int
+    is_active: bool
+    sort_order: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+class ServerReorderRequest(BaseModel):
+    ordered_ids: List[int]
+
+class ServerCheckRequest(BaseModel):
+    host: str
+    port: int
+
+
+# class ServerCheckRequest(BaseModel):
+#     server: str
+#     login: int
+#     password: str
+#     port: int
+#     path:str
+
+class ServerRequest(BaseModel):
+    user: str
+    pwd: Optional[str] = None
+    server: str
+    server_alias: str
+    platform: str
+    ip: str
+    # path di mt5
+    path: str
+    port: int
+    is_active: bool
+    path: Optional[str] = None
+    login: Optional[str] = None
+    password: Optional[str] = None
+    sort_order: Optional[int] = None
+    
+class Trader(BaseModel):
+    id: Optional[int]
+    name: str
+    status: Literal['active','inactive']  # obbliga a uno dei due valori
+    master_server_id: Optional[int]
+    slave_server_id: Optional[int]
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    tsl: Optional[float] = None
+    moltiplicatore: Optional[float] = 1.0
+    fix_lot: Optional[float] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    custom_signal_interval:Optional[int] =None
+    selected_symbol: Optional[str] = None
+    selected_signal: Optional[str] = None
+    #  //il broker preso dal server slave
+    broker: Optional[str] = None           
+
+    # 🆕 Profit TP locale (non salvato in DB)
+    use_profit_tp: bool = False
+    profit_tp_value: Optional[float] = None
+
+    # 🆕 Blocco notturno
+    block_night_trading: bool = False
+
+    # 🆕 Direction filter (buy/sell/both)
+    direction_filter: str = "both"
+
+    # 🆕 Session filter (ASIA,LONDON,NY-LON,NY,OFF)
+    sessions_filter: str = "ASIA,LONDON,NY-LON,NY,OFF"
+
+    # 🆕 Forza SL/TP dal form
+    use_signal_sl_tp: bool = False
+
+
+class Newtrader(BaseModel):
+    
+    name: str
+    status: Literal['active','inactive']  # obbliga a uno dei due valori
+    master_server_id: Optional[int]
+    slave_server_id: Optional[int]
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    tsl: Optional[float] = None
+    moltiplicatore: Optional[float] = 1.0
+    fix_lot: Optional[float] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class GetLastCandleRequest(BaseModel):
+    symbol: str
+    timeframe: str
+    start: int = 0
+    count: int = 10
+class GetLastDealsHistoryRequest(BaseModel):
+    symbol: Optional[str] = None
+
+class BuyRequest(BaseModel):
+    symbol: str
+    lot: float
+    sl_point: float
+    tp_point: float
+    deviation: float
+    magic: int
+    comment: str = ""
+
+class SellRequest(BuyRequest):
+    pass
+
+class CloseRequest(BaseModel):
+    symbol: str
+    magic: int
+    deviation: float
+
+class DealsAllResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    data: List[dict]
+
+# Modello per aggiornamento trader
+class TraderServersUpdate(BaseModel):
+    master_server_id: Optional[int] = None
+    slave_server_id: Optional[int] = None
+    sl:Optional[int] = None
+    tp:Optional[int] = None
+    tsl:Optional[int] = None
+    moltiplicatore:Optional[int] = None
+    fix_lot:Optional[float] = None
+
+    # 🆕 campi custom signal
+    selected_signal: str | None = None
+    custom_signal_interval: int | None = None
+    selected_symbol: str | None = None
+
+    # 🆕 session filter
+    sessions_filter: str | None = None
+
+    # 🆕 direction filter
+    direction_filter: str | None = None
+
+

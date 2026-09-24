@@ -1,0 +1,123 @@
+Cartella trading_api su Ubuntu contiene:
+
+.env
+
+REMOTE_MT5_API_URL=http://192.168.1.180:8000/
+FASTAPI_PORT=8080
+
+
+main.py
+
+Fa partire un FastAPI proxy chiamando un’API MT5 remota.
+
+Legge REMOTE_MT5_API_URL e API_PORT (o default 8080) dal .env.
+
+Tutti gli endpoint (/health, /positions, /symbols/*, /order, /login, ecc.) chiamano in realtà l’API remota tramite httpx.
+
+Alla partenza stampa il log dell’URL remoto e della porta su cui si avvia il proxy.
+
+
+DOCKERFILE:
+Ok, ti spiego passo passo cosa fa quel `Dockerfile`:
+
+---
+
+### 1️⃣ Base Python
+
+```dockerfile
+FROM python:3.11.9-slim
+```
+
+* Usa l’immagine ufficiale **Python 3.11.9 slim** come base.
+* Slim significa che è più leggera perché ha pochi pacchetti di sistema preinstallati.
+
+---
+
+### 2️⃣ Imposta la working directory
+
+```dockerfile
+WORKDIR /code
+```
+
+* Tutti i comandi successivi (`COPY`, `RUN`, `CMD`) verranno eseguiti dentro `/code`.
+* `/code` diventa la cartella principale del container.
+
+---
+
+### 3️⃣ Installa build tools
+
+```dockerfile
+RUN apt-get update && apt-get install -y \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+* Installa `gcc` e `python3-dev`, necessari per compilare alcune librerie Python (ad esempio `psutil`) su ARM o Linux in generale.
+* Pulisce la cache di apt per mantenere l’immagine più leggera.
+
+---
+
+### 4️⃣ Installa dipendenze Python
+
+```dockerfile
+COPY requirements.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+```
+
+* Copia `requirements.txt` nel container.
+* Aggiorna `pip` e installa tutte le dipendenze elencate in `requirements.txt`.
+* `--no-cache-dir` evita di salvare file temporanei di installazione.
+
+---
+
+### 5️⃣ Copia il codice del progetto
+
+```dockerfile
+COPY . .
+```
+
+* Copia tutti i file della cartella corrente (dove c’è il Dockerfile) nella cartella `/code` del container.
+* Include `main.py`, `run_multi_instances.py`, `logger.py`, `.env`, ecc.
+
+---
+
+### 6️⃣ Espone la porta
+
+```dockerfile
+EXPOSE 8080
+```
+
+* Dice a Docker che il container ascolterà sulla porta **8080**.
+* Serve per poter collegare il container al host o ad altri container tramite `-p` o `ports` nel `docker-compose.yml`.
+
+---
+
+### 7️⃣ Comando di avvio
+
+```dockerfile
+CMD ["python", "run_multi_instances.py"]
+```
+
+* Quando il container parte, esegue lo script `run_multi_instances.py`.
+* Questo avvierà il backend FastAPI su più porte (come definito in `run_multi_instances.py`).
+
+---
+
+💡 **In sintesi**: questo Dockerfile prende Python, installa librerie di sistema e Python necessarie, copia il tuo progetto dentro il container, espone la porta 8080 e avvia il backend FastAPI.
+
+
+***docker compose up -d ***
+
+Cosa ha fatto docker compose up -d
+
+In un solo comando, Docker Compose ha fatto 3 cose principali:
+
+Ha costruito l’immagine Docker (build)
+
+Ha creato la rete Docker
+
+Ha creato (e avviato) il container in background (-d)
+
+

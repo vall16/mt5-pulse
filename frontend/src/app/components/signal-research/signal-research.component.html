@@ -1,0 +1,236 @@
+<div class="research-container">
+  <div class="header">
+    <h1>Signal Research</h1>
+    <p class="subtitle">Ottimizza parametri SL/TP e scopri le migliori combinazioni per ogni strategia</p>
+  </div>
+
+  <!-- Config Panel -->
+  <div class="config-card">
+    <div class="config-section">
+      <h3>Configurazione</h3>
+      <div class="config-grid">
+        <div class="form-group fg-symbol">
+          <label>Symbol</label>
+          <select [(ngModel)]="config.symbol" class="form-control">
+            <option *ngFor="let s of symbols" [value]="s">{{ s }}</option>
+          </select>
+        </div>
+        <div class="form-group fg-days">
+          <label>Days</label>
+          <input type="number" [(ngModel)]="config.days" min="7" max="365" class="form-control" />
+        </div>
+        <div class="form-group fg-money">
+          <label>Lot</label>
+          <input type="number" [(ngModel)]="config.lot" min="0.01" step="0.01" class="form-control" />
+        </div>
+        <div class="form-group fg-money">
+          <label>Balance ($)</label>
+          <input type="number" [(ngModel)]="config.balance" min="100" step="100" class="form-control" />
+        </div>
+        <div class="form-group fg-direction">
+          <label>Direction</label>
+          <select [(ngModel)]="config.direction" class="form-control">
+            <option value="both">Both (Buy + Sell)</option>
+            <option value="buy">Solo Buy</option>
+            <option value="sell">Solo Sell</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <h3>Range Ottimizzazione</h3>
+      <div class="config-grid">
+        <div class="form-group fg-sl">
+          <label>SL Min</label>
+          <input type="number" [(ngModel)]="config.sl_min" min="50" step="50" class="form-control" />
+        </div>
+        <div class="form-group fg-sl">
+          <label>SL Max</label>
+          <input type="number" [(ngModel)]="config.sl_max" min="100" step="50" class="form-control" />
+        </div>
+        <div class="form-group fg-sl">
+          <label>SL Step</label>
+          <input type="number" [(ngModel)]="config.sl_step" min="10" step="10" class="form-control" />
+        </div>
+        <div class="form-group fg-tp">
+          <label>TP Min</label>
+          <input type="number" [(ngModel)]="config.tp_min" min="50" step="50" class="form-control" />
+        </div>
+        <div class="form-group fg-tp">
+          <label>TP Max</label>
+          <input type="number" [(ngModel)]="config.tp_max" min="100" step="50" class="form-control" />
+        </div>
+        <div class="form-group fg-tp">
+          <label>TP Step</label>
+          <input type="number" [(ngModel)]="config.tp_step" min="10" step="10" class="form-control" />
+        </div>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <h3>Strategie</h3>
+      <div class="tf-filter-row">
+        <span class="tf-filter-label">Filtra per timeframe:</span>
+        <button class="tf-chip" [class.active]="tfFilter === ''" (click)="tfFilter = ''">Tutti</button>
+        <button class="tf-chip" [class.active]="tfFilter === 'M5'" (click)="tfFilter = 'M5'">M5</button>
+        <button class="tf-chip" [class.active]="tfFilter === 'M15'" (click)="tfFilter = 'M15'">M15</button>
+        <button class="tf-chip" [class.active]="tfFilter === 'M1'" (click)="tfFilter = 'M1'">M1</button>
+      </div>
+      <div class="strategy-chips">
+        <button *ngFor="let s of filteredStrategies"
+          class="strategy-chip"
+          [class.selected]="isStrategySelected(s)"
+          [title]="strategyDescriptions[s]"
+          (click)="toggleStrategy(s)">
+          {{ s }} <span class="chip-tf">{{ strategyTimeframes[s] }}</span>
+        </button>
+      </div>
+      <div class="combo-count">
+        {{ selectedStrategies.length }} strategie selezionate · {{ getComboCount() }} combinazioni per strategia
+      </div>
+    </div>
+
+    <div class="config-actions">
+      <button class="run-btn" (click)="runOptimization()" [disabled]="loading || selectedStrategies.length === 0" *ngIf="!loading">
+        Avvia Ricerca
+      </button>
+      <button class="cancel-btn" (click)="cancelResearch()" *ngIf="loading">
+        Cancel
+      </button>
+      <button class="export-btn" (click)="exportCsv()" *ngIf="optimizationResults.length > 0">
+        Export CSV
+      </button>
+      <button class="export-btn pdf-btn" (click)="exportPdf()" *ngIf="optimizationResults.length > 0">
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="error-box" *ngIf="error">{{ error }}</div>
+
+  <!-- Loading -->
+  <div class="loading-box" *ngIf="loading">
+    <div class="progress-container">
+      <div class="progress-bar" [style.width.%]="progress"></div>
+    </div>
+    <div class="progress-info">
+      <span>{{ progress }}%</span>
+      <span>Testing combinations...</span>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" *ngIf="optimizationResults.length > 0">
+    <div class="results-header">
+      <h2>Risultati Ottimizzazione</h2>
+      <span class="results-count">{{ optimizationResults.length }} combinazioni testate</span>
+    </div>
+
+    <!-- Top Results Cards -->
+    <div class="top-cards">
+      <div class="top-card" *ngFor="let r of optimizationResults | slice:0:5; let i = index"
+           [class.gold]="i === 0" [class.silver]="i === 1" [class.bronze]="i === 2"
+           (click)="selectResult(r)">
+        <div class="top-card-rank">#{{ i + 1 }}</div>
+        <div class="top-card-strategy">{{ r.strategy }}</div>
+        <div class="top-card-params">SL={{ r.sl }} TP={{ r.tp }} <span class="direction-badge" [class.buy]="r.direction === 'buy'" [class.sell]="r.direction === 'sell'">{{ r.direction | uppercase }}</span></div>
+        <div class="top-card-metrics">
+          <span class="metric" [class.positive]="r.return_pct >= 0" [class.negative]="r.return_pct < 0">
+            {{ r.return_pct >= 0 ? '+' : '' }}{{ r.return_pct | number:'1.1-1' }}%
+          </span>
+          <span class="metric-sep">|</span>
+          <span class="metric">{{ r.trades }} trades</span>
+          <span class="metric-sep">|</span>
+          <span class="metric">{{ r.win_rate | number:'1.0-0' }}% WR</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full Table -->
+    <div class="table-container">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('strategy')">Strategy</th>
+            <th class="sortable" (click)="sortBy('sl')">SL</th>
+            <th class="sortable" (click)="sortBy('tp')">TP</th>
+            <th class="sortable" (click)="sortBy('direction')">Dir</th>
+            <th class="sortable" (click)="sortBy('trades')">Trades</th>
+            <th class="sortable" (click)="sortBy('win_rate')">Win Rate</th>
+            <th class="sortable" (click)="sortBy('return_pct')">Return %</th>
+            <th class="sortable" (click)="sortBy('max_dd')">Max DD</th>
+            <th class="sortable" (click)="sortBy('sharpe')">Sharpe</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let r of sortedResults; let i = index"
+              [class.selected-row]="selectedResult === r"
+              [class.top-3]="i < 3">
+            <td class="strategy-cell">{{ r.strategy }}</td>
+            <td>{{ r.sl }}</td>
+            <td>{{ r.tp }}</td>
+            <td><span class="direction-badge" [class.buy]="r.direction === 'buy'" [class.sell]="r.direction === 'sell'">{{ r.direction | uppercase }}</span></td>
+            <td>{{ r.trades }}</td>
+            <td [class.positive]="r.win_rate >= 50" [class.negative]="r.win_rate < 50">
+              {{ r.win_rate | number:'1.1-1' }}%
+            </td>
+            <td [class.positive]="r.return_pct >= 0" [class.negative]="r.return_pct < 0">
+              {{ r.return_pct >= 0 ? '+' : '' }}{{ r.return_pct | number:'1.1-1' }}%
+            </td>
+            <td class="negative">{{ r.max_dd | number:'1.1-1' }}%</td>
+            <td [class.positive]="r.sharpe >= 1" [class.negative]="r.sharpe < 0.5">
+              {{ r.sharpe | number:'1.2-2' }}
+            </td>
+            <td>
+              <button class="select-btn" (click)="selectResult(r)">Dettaglio</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Selected Result Detail -->
+    <div class="detail-panel" *ngIf="selectedResult">
+      <div class="detail-header">
+        <h3>{{ selectedResult.strategy }} — SL={{ selectedResult.sl }} TP={{ selectedResult.tp }} <span class="direction-badge" [class.buy]="selectedResult.direction === 'buy'" [class.sell]="selectedResult.direction === 'sell'">{{ selectedResult.direction | uppercase }}</span></h3>
+        <button class="close-btn" (click)="selectedResult = null">&times;</button>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="detail-label">Trades</div>
+          <div class="detail-value">{{ selectedResult.trades }}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Win Rate</div>
+          <div class="detail-value" [class.positive]="selectedResult.win_rate >= 50">{{ selectedResult.win_rate | number:'1.1-1' }}%</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Return</div>
+          <div class="detail-value" [class.positive]="selectedResult.return_pct >= 0" [class.negative]="selectedResult.return_pct < 0">
+            {{ selectedResult.return_pct >= 0 ? '+' : '' }}{{ selectedResult.return_pct | number:'1.1-1' }}%
+          </div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Max Drawdown</div>
+          <div class="detail-value negative">{{ selectedResult.max_dd | number:'1.1-1' }}%</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Avg Hold</div>
+          <div class="detail-value">{{ selectedResult.avg_hold | number:'1.0-0' }} bars</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-label">Sharpe Ratio</div>
+          <div class="detail-value" [class.positive]="selectedResult.sharpe >= 1">{{ selectedResult.sharpe | number:'1.2-2' }}</div>
+        </div>
+      </div>
+      <div class="detail-recommendation">
+        <span class="rec-label">Raccomandazione:</span>
+        <span *ngIf="selectedResult.sharpe >= 1.5 && selectedResult.return_pct >= 10" class="rec-strong">Fortemente consigliata</span>
+        <span *ngIf="selectedResult.sharpe >= 1 && selectedResult.return_pct >= 5" class="rec-good">Consigliata</span>
+        <span *ngIf="selectedResult.sharpe < 1 || selectedResult.return_pct < 5" class="rec-caution">Usa con cautela</span>
+      </div>
+    </div>
+  </div>
+</div>

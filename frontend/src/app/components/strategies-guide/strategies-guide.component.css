@@ -1,0 +1,189 @@
+.strategies-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.news-filter-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #1e3a5f;
+  border: 1px solid #2d5a8e;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 24px;
+}
+
+.news-filter-banner .banner-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.news-filter-banner strong {
+  color: #93c5fd;
+  font-size: 0.9rem;
+}
+
+.news-filter-banner p {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: #bfdbfe;
+  line-height: 1.4;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  font-size: 1.8rem;
+  margin: 0 0 8px;
+  color: #fff;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.strategies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+.strategy-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color 0.2s;
+}
+
+.strategy-card:hover {
+  border-color: #475569;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.strategy-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.risk-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.risk-low {
+  background: #064e3b;
+  color: #6ee7b7;
+}
+
+.risk-medium {
+  background: #78350f;
+  color: #fcd34d;
+}
+
+.risk-high {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+
+.description {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #334155;
+  color: #94a3b8;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.config-value {
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.tips-section {
+  border-top: 1px solid #334155;
+  padding-top: 12px;
+}
+
+.tips-section h3 {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0 0 8px;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tips-list li {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .strategies-grid {
+    grid-template-columns: 1fr;
+  }
+}

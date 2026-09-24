@@ -1,0 +1,91 @@
+<div class="history-container">
+  <div class="header">
+    <h1>Trading History</h1>
+    <button class="refresh-btn" (click)="refresh()" [disabled]="loading || selectedTraderId == null">
+      {{ loading ? 'Loading...' : 'Refresh' }}
+    </button>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-group">
+      <select
+        [(ngModel)]="selectedTraderId"
+        (ngModelChange)="onTraderChange()"
+        class="filter-select"
+      >
+        <option *ngFor="let trader of traders" [ngValue]="trader.id">
+          {{ trader.name }} ({{ trader.status }})
+        </option>
+      </select>
+      <input
+        type="text"
+        [(ngModel)]="symbolFilter"
+        placeholder="Filter by symbol (e.g., EURUSD)"
+        class="filter-input"
+        (keyup.enter)="filterBySymbol()"
+      />
+      <button class="filter-btn" (click)="filterBySymbol()">Filter</button>
+      <button class="clear-btn" (click)="clearFilter()">Clear</button>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="summary-label">Total Trades</div>
+      <div class="summary-value">{{ filteredDeals.length }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Total Profit</div>
+      <div class="summary-value" [class.positive]="getTotalProfit() >= 0" [class.negative]="getTotalProfit() < 0">
+        {{ getTotalProfit() | number:'1.2-2' }}
+      </div>
+    </div>
+  </div>
+
+  <div class="deals-table-container">
+    <table class="deals-table" *ngIf="filteredDeals.length > 0">
+      <thead>
+        <tr>
+          <th>Ticket</th>
+          <th>Opened</th>
+          <th>Closed</th>
+          <th>Type</th>
+          <th>Symbol</th>
+          <th>Volume</th>
+          <th>Open Price</th>
+          <th>Close Price</th>
+          <th>Profit</th>
+          <th>Comment</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let deal of filteredDeals">
+          <td>{{ deal.ticket }}</td>
+          <td class="date-cell">{{ formatDate(deal.opened_at) }}</td>
+          <td class="date-cell">{{ formatDate(deal.closed_at) }}</td>
+          <td>
+            <span class="deal-type" [ngClass]="getDealTypeClass(deal.type)">
+              {{ getDealType(deal.type) }}
+            </span>
+          </td>
+          <td class="symbol-cell">{{ deal.symbol }}</td>
+          <td>{{ deal.volume | number:'1.2-2' }}</td>
+          <td>{{ deal.price_open | number:'1.5-5' }}</td>
+          <td>{{ deal.price_close | number:'1.5-5' }}</td>
+          <td [class.positive]="deal.profit >= 0" [class.negative]="deal.profit < 0">
+            {{ deal.profit | number:'1.2-2' }}
+          </td>
+          <td class="comment-cell">{{ deal.comment || '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="no-data" *ngIf="selectedTraderId != null && filteredDeals.length === 0 && !loading">
+      No closed trades found
+    </div>
+
+    <div class="loading-spinner" *ngIf="loading">
+      Loading deals history...
+    </div>
+  </div>
+</div>
