@@ -10,7 +10,7 @@ tp_points = trader.tp
 sl_points = effective_sl if effective_sl is not None else trader.sl
 tp_points = effective_tp if effective_tp is not None else trader.tp
 ```
-prova git
+prova gitt
 
 **Priorità:** SL/TP dinamico (calcolato dalla strategia) > SL/TP fissi (impostati dall'utente nel form della dashboard)
 
