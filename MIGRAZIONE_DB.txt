@@ -1,0 +1,59 @@
+================================================================
+ MIGRAZIONE DB MT5Pulse -> MACCHINA NUOVA   (step 3 e 4)
+================================================================
+ Prerequisiti: step 1-2 gia' eseguiti.
+   - MySQL 9.4 installato e servizio attivo
+   - trader_db_dump.sql copiato in C:\migrazione\trader_db_dump.sql
+
+ NOTA: questo file contiene una password in chiaro.
+       E' escluso dal git tramite .gitignore (regola MIGRAZIONE_*.txt).
+
+
+----------------------------------------------------------------
+ STEP 3 - Creare database e utente
+----------------------------------------------------------------
+ Entra in MySQL come root e incolla:
+
+   CREATE DATABASE trader_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+   CREATE USER 'trader'@'localhost' IDENTIFIED BY 'vibe2025';
+   GRANT ALL PRIVILEGES ON trader_db.* TO 'trader'@'localhost';
+   FLUSH PRIVILEGES;
+
+ Verifica (stessa console):
+
+   SHOW DATABASES LIKE 'trader_db';
+
+ Se devi cambiare la password, ricordati di aggiornare anche
+ MYSQL_PASSWORD in backend\.env sulla macchina nuova.
+
+
+----------------------------------------------------------------
+ STEP 4 - Importare il dump
+----------------------------------------------------------------
+ PowerShell NON supporta la redirezione '<', quindi usa cmd.
+ Copia questo comando e adattalo se il percorso del dump cambia:
+
+   cmd /c ""C:\Program Files\MySQL\MySQL Server 9.4\bin\mysql.exe" -u root -p < C:\migrazione\trader_db_dump.sql"
+
+ Ti verrà chiesta la password di root MySQL. Digita e premi Invio
+ (durante la digitazione non compare nulla: e' normale).
+
+ Il comando non stampa nulla se va a buon fine: l'import e' riuscito
+ se torni al prompt senza errori.
+
+ Verifica dell'import:
+
+   cmd /c ""C:\Program Files\MySQL\MySQL Server 9.4\bin\mysql.exe" -u root -p -e "SELECT COUNT(*) AS utenti FROM trader_db.users; SELECT COUNT(*) AS ordini FROM trader_db.slave_orders; SELECT COUNT(*) AS server FROM trader_db.servers;" trader_db"
+
+ Valori attesi (riferiti al dump generato il 2026-09-28):
+   utenti  = 2        (roberto, william)
+   ordini  = 76       (slave_orders)
+   server  = 17
+
+ Se i numeri non corrispondono, l'import non e' andato a buon fine:
+ NON proseguire con lo step 5, torna a questo step e ricarica il dump.
+
+
+ utente locale: william\william123  !!!
+
+
