@@ -1,7 +1,16 @@
 # logger.py
+import sys
 from datetime import datetime
 from pprint import pformat
 import time
+
+# Windows: la console usa cp1252 e crasha (UnicodeEncodeError) sulle emoji.
+# Forza UTF-8 sostituendo i caratteri non codificabili, così print() non fallisce.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 start_time = datetime.now()
 logs = []  # lista globale dei log

@@ -4,7 +4,8 @@
       "Bash(netstat *)",
       "Bash(findstr *)",
       "Bash(..\\venv\\scripts\\python.exe *)",
-      "Bash(do *)"
+      "Bash(do *)",
+      "Bash(\"c:\\users\\vallo\\appdata\\local\\programs\\mysql\\mysql-9.4.0-winx64\\bin\\mysql.exe\" *)"
     ]
   },
   "$version": 4
