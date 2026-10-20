@@ -301,7 +301,6 @@ class SignalStrategy:
             trader = session["trader"]
             trader_data = session["trader_data"]
             prev_signal = session.get("prev_signal", "HOLD")
-            logs.clear()
 
         slave_url = f"http://{trader_data['slave_ip']}:{trader_data['slave_port']}"
         symbol = trader.selected_symbol

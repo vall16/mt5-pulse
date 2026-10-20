@@ -271,13 +271,10 @@
         <button class="action-btn save-btn" (click)="saveTrader(trader)">💾 Salva Server + SL/TP</button>
       </div>
 
-      <!-- Log sezione -->
-      <div class="log-container" *ngIf="trader.logs?.length">
-        <h5>Execution Log</h5>
-        <div class="log-box">
-          <div *ngFor="let line of trader.logs">{{ line }}</div>
-        </div>
-      </div>
+      <!-- Pulsante Log -->
+      <button class="action-btn log-btn" (click)="openLogModal(trader)">
+        📜 Log{{ trader.logs?.length ? ' (' + trader.logs?.length + ')' : '' }}
+      </button>
 
         </div>
       <div class="card-actions">
@@ -597,6 +594,22 @@
           </div>
         </div>
         <div class="analysis-text">{{ analyzeResult.analysis }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Log -->
+<div class="modal-overlay" *ngIf="showLogModal" (click)="closeLogModal()">
+  <div class="modal-content log-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>📜 Execution Log — {{ logModalTrader?.name }}</h3>
+      <button class="delete-btn" (click)="closeLogModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-box log-modal-box" #logBox>
+        <div *ngIf="!logModalTrader?.logs?.length" class="log-empty">Nessun log</div>
+        <div *ngFor="let line of logModalTrader?.logs">{{ line }}</div>
       </div>
     </div>
   </div>

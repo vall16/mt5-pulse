@@ -798,7 +798,7 @@
 }
 
 .log-box {
-  max-height: 120px;
+  max-height: 320px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 0.85rem;
@@ -806,6 +806,26 @@
   padding: 8px;
   border-radius: 8px;
   margin-top: 6px;
+}
+
+/* Pulsante Log */
+.log-btn {
+  margin-top: 10px;
+  width: 100%;
+}
+
+/* Modale Log */
+.log-modal {
+  max-width: 900px;
+}
+.log-modal-box {
+  max-height: 70vh;
+  overflow-y: auto;
+  margin-top: 0;
+}
+.log-empty {
+  color: #888;
+  font-style: italic;
 }
 
 .profit-tp-row {

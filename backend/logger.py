@@ -19,6 +19,7 @@ for _s in (sys.stdout, sys.stderr):
 
 start_time = datetime.now()
 logs = []  # lista globale dei log
+MAX_LOGS = 2000  # tetto alla lista in memoria (il file resta completo)
 
 # ── ANSI colori ──
 YELLOW = "\033[93m"
@@ -89,6 +90,10 @@ def log(message, file="server_log.txt"):
         # 3. SCRIVI SU FILE (SEMPRE SENZA COLORI)
         with open(file, "a", encoding="utf-8") as f:
             f.write(line_to_print + "\n")
+
+    # 4. TETTO alla lista in memoria (evita crescita illimitata)
+    if len(logs) > MAX_LOGS:
+        del logs[:len(logs) - MAX_LOGS]
 
 
 import requests

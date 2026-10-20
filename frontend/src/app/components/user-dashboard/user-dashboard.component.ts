@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ElementRef, ViewChild } from '@angular/core';
 
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -171,6 +171,42 @@ export class UserDashboardComponent implements OnInit {
   // 📜 Aggiorna i log di tutti i trader in ascolto
   private refreshLogs() {
     this.traders.filter(t => t.listening).forEach(t => this.refreshTraderLogs(t));
+  }
+
+  // 📜 Modale log
+  logModalTrader: Trader | null = null;
+  showLogModal = false;
+  private logModalSub: Subscription | null = null;
+  @ViewChild('logBox') logBoxRef: ElementRef | null = null;
+
+  openLogModal(trader: Trader) {
+    this.logModalTrader = trader;
+    this.showLogModal = true;
+    this.refreshTraderLogs(trader);
+    // 🔄 storico in tempo reale: ripete il fetch mentre la modale è aperta
+    this.logModalSub = interval(2000).subscribe(() => {
+      if (this.showLogModal && this.logModalTrader) {
+        this.refreshTraderLogs(this.logModalTrader);
+        this.scrollLogToBottom();
+      }
+    });
+  }
+
+  closeLogModal() {
+    this.showLogModal = false;
+    this.logModalTrader = null;
+    if (this.logModalSub) {
+      this.logModalSub.unsubscribe();
+      this.logModalSub = null;
+    }
+  }
+
+  // 📜 porta lo scroll in fondo alla modale
+  private scrollLogToBottom() {
+    setTimeout(() => {
+      const el = this.logBoxRef?.nativeElement;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
   }
 
   onDrop(event: CdkDragDrop<Trader[]>) {
@@ -399,6 +435,10 @@ async deleteTrader(trader: Trader) {
     if (this.logRefreshSub) {
       this.logRefreshSub.unsubscribe();
       this.logRefreshSub = null;
+    }
+    if (this.logModalSub) {
+      this.logModalSub.unsubscribe();
+      this.logModalSub = null;
     }
   }
 
