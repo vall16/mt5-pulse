@@ -1884,3 +1884,12 @@ def stop_polling(req: StopPollingRequest):
             global_log(f"⏹ STOP {trader_name} | {trader_symbol}")
             return {"status": "stopped", "trader_id": trader_id}
     return {"status": "not_running"}
+
+
+@router.get("/logs")
+def get_logs(trader: str = None, limit: int = 200):
+    """Restituisce i log di polling, opz. filtrati per nome trader."""
+    lines = logs
+    if trader:
+        lines = [l for l in lines if trader in l]
+    return {"logs": lines[-limit:]}

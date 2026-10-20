@@ -63,6 +63,7 @@ export class UserDashboardComponent implements OnInit {
   supervisorModel: string = 'openrouter/free';
   supervisorApplying: { [traderId: number]: boolean } = {};
   private supervisorRefreshSub: Subscription | null = null;
+  private logRefreshSub: Subscription | null = null;
 
   availableSignals = [
   { value: 'SUPER', label: 'XAUUSD Super' },
@@ -151,6 +152,25 @@ export class UserDashboardComponent implements OnInit {
       if (this.supervisorStatus?.running) this.loadSupervisorStatus();
     });
 
+    // 📜 Aggiorna i log di polling dei trader in ascolto
+    this.logRefreshSub = interval(3000).subscribe(() => this.refreshLogs());
+
+  }
+
+  // 📜 Log di polling per singolo trader
+  private refreshTraderLogs(trader: Trader) {
+    this.traderService.getLogs(trader.name).subscribe({
+      next: (res: any) => {
+        trader.logs = res.logs || [];
+        this.cdr.detectChanges();
+      },
+      error: () => {}
+    });
+  }
+
+  // 📜 Aggiorna i log di tutti i trader in ascolto
+  private refreshLogs() {
+    this.traders.filter(t => t.listening).forEach(t => this.refreshTraderLogs(t));
   }
 
   onDrop(event: CdkDragDrop<Trader[]>) {
@@ -375,6 +395,10 @@ async deleteTrader(trader: Trader) {
     if (this.supervisorRefreshSub) {
       this.supervisorRefreshSub.unsubscribe();
       this.supervisorRefreshSub = null;
+    }
+    if (this.logRefreshSub) {
+      this.logRefreshSub.unsubscribe();
+      this.logRefreshSub = null;
     }
   }
 
@@ -748,6 +772,7 @@ saveTrader(trader: Trader) {
       this.traderService.startListening(trader, trader.selected_signal).subscribe({
         next: (res: any) => {
           console.log("Polling started:", res);
+          this.refreshTraderLogs(trader);
         },
         error: (err: any) => {
           console.error("Error starting polling:", err);
@@ -768,6 +793,7 @@ saveTrader(trader: Trader) {
       this.traderService.stopListening(trader).subscribe({
         next: (res: any) => {
           console.log("Polling BUY stopped:", res);
+          this.refreshTraderLogs(trader);
         },
         error: (err: any) => {
           console.error("Error stopping polling:", err);

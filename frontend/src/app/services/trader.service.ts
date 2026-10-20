@@ -196,6 +196,13 @@ export class TraderService {
     return this.http.post(`${this.apiUrl}/trade/stop_polling`, { trader_id: trader.id });
   }
 
+  /** Recupera i log di polling (opz. filtrati per nome trader) */
+  getLogs(traderName: string, limit: number = 200): Observable<{ logs: string[] }> {
+    return this.http.get<{ logs: string[] }>(
+      `${this.apiUrl}/trade/logs?trader=${encodeURIComponent(traderName)}&limit=${limit}`
+    );
+  }
+
   analyzeTrader(traderId: number, limit: number = 100, source: string = 'db', days: number = 30): Observable<any> {
     return this.http.post(`${this.apiUrl}/db/analyze`, { trader_id: traderId, limit, source, days });
   }

@@ -271,6 +271,14 @@
         <button class="action-btn save-btn" (click)="saveTrader(trader)">💾 Salva Server + SL/TP</button>
       </div>
 
+      <!-- Log sezione -->
+      <div class="log-container" *ngIf="trader.logs?.length">
+        <h5>Execution Log</h5>
+        <div class="log-box">
+          <div *ngFor="let line of trader.logs">{{ line }}</div>
+        </div>
+      </div>
+
         </div>
       <div class="card-actions">
 
@@ -468,13 +476,6 @@
   </div>
 
   
-  <!-- Log sezione -->
-  <div class="log-container" *ngIf="trader.logs?.length">
-    <h5>Execution Log</h5>
-    <div class="log-box">
-      <div *ngFor="let line of trader.logs">{{ line }}</div>
-    </div>
-  </div>
 </div>
 </div>
       <div class="empty-state" *ngIf="traders.length === 0">
