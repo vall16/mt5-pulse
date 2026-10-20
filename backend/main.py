@@ -1,6 +1,16 @@
 from contextlib import asynccontextmanager
 import logging
 import os
+import sys
+
+# Windows: la console usa cp1252 e fa crashare print() con emoji (▶, 🚀, ...)
+# Forza UTF-8 su stdout/stderr PRIMA di importare moduli che loggano.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -29,6 +39,7 @@ logging.basicConfig(
     filename=log_file_path,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
+    encoding="utf-8",
 )
 logging.info("Starting API")
 
@@ -50,7 +61,7 @@ async def lifespan(app: FastAPI):
     logging.info("🛑 Manager API in chiusura. Cleanup eseguito se necessario.")
 
 # --- APP ---
-app = FastAPI(title="MT5 Manager API")
+app = FastAPI(title="MT5 Manager API", lifespan=lifespan)
 
 # --- CORS ---
 load_dotenv()

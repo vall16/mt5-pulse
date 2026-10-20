@@ -161,7 +161,7 @@ def run_migrations():
         conn = get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SHOW COLUMNS FROM slave_orders WHERE Field='master_order_id' AND IS_NULLABLE='NO'")
+        cursor.execute("SHOW COLUMNS FROM slave_orders WHERE Field='master_order_id' AND `Null`='NO'")
         if cursor.fetchone():
             log("🔧 Migration: rendo master_order_id nullable...")
             cursor.execute("ALTER TABLE slave_orders DROP FOREIGN KEY fk_slave_order_master")

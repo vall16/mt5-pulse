@@ -9,6 +9,12 @@ import sys
 import io
 import re
 
+# Windows: se stdout è cp1252 (console/pipe) le emoji fanno crashare print()
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 start_time = datetime.now()
