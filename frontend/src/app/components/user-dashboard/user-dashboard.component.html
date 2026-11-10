@@ -542,7 +542,7 @@
   </div>
 </div>
 <div class="modal-overlay" *ngIf="showServersList" (click)="closeServersList()">
-  <div class="modal-content" (click)="$event.stopPropagation()">
+  <div class="modal-content servers-modal" (click)="$event.stopPropagation()">
     <!-- <app-servers-list (traderAdded)="onTraderAdded()" (cancel)="closeAddModal()"></app-servers-list> -->
      <app-servers-list></app-servers-list>
   </div>

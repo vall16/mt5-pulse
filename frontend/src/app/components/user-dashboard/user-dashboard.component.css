@@ -449,6 +449,12 @@
   overflow-y: auto;
 }
 
+/* Modale Trading Servers: larghezza piena, altezza invariata */
+.modal-content.servers-modal {
+  width: 100%;
+  max-width: none;
+}
+
 
 
 /* .loader {

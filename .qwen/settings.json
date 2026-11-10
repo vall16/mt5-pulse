@@ -6,7 +6,12 @@
       "Bash(..\\venv\\scripts\\python.exe *)",
       "Bash(do *)",
       "Bash(\"c:\\users\\vallo\\appdata\\local\\programs\\mysql\\mysql-9.4.0-winx64\\bin\\mysql.exe\" *)",
-      "Bash(venv\\scripts\\python.exe *)"
+      "Bash(venv\\scripts\\python.exe *)",
+      "Bash(where *)",
+      "Bash(docker *)",
+      "Bash(python3 *)",
+      "Bash(node *)",
+      "Bash(\"c:\\users\\vallo\\appdata\\local\\programs\\python\\python313\\python.exe\" *)"
     ]
   },
   "$version": 4

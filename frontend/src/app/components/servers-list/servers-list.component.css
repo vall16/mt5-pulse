@@ -1,6 +1,6 @@
 .container {
-  max-width: 1800px;
-  width: 95%;
+  max-width: none;
+  width: 100%;
   margin: 0 auto;
   padding: 24px 20px;
   box-sizing: border-box;
@@ -90,9 +90,9 @@
 }
 
 .add-server-card {
-  width: 95%;
-  max-width: 1200px;
-  margin: 0 auto 20px;
+  width: 100%;
+  max-width: none;
+  margin: 0 0 20px;
   padding: 20px 25px;
   border-radius: 12px;
   background: #ffffff;
@@ -240,12 +240,16 @@
   transition: background-color 0.15s ease;
 }
 
+.grid-body .grid-row:nth-child(odd) {
+  background: #ffffff;
+}
+
 .grid-body .grid-row:nth-child(even) {
-  background: #f8fafc;
+  background: #e2e8f0;
 }
 
 .grid-row:hover {
-  background: #eef2ff;
+  background: #dbeafe;
 }
 
 .grid-cell {
