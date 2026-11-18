@@ -604,12 +604,17 @@
   <div class="modal-content log-modal" (click)="$event.stopPropagation()">
     <div class="modal-header">
       <h3>📜 Execution Log — {{ logModalTrader?.name }}</h3>
-      <button class="delete-btn" (click)="closeLogModal()">✕</button>
+      <div>
+        <button class="delete-btn" (click)="clearLog()" title="Svuota log">🗑️</button>
+        <button class="delete-btn" (click)="closeLogModal()">✕</button>
+      </div>
     </div>
     <div class="modal-body">
       <div class="log-box log-modal-box" #logBox>
         <div *ngIf="!logModalTrader?.logs?.length" class="log-empty">Nessun log</div>
-        <div *ngFor="let line of logModalTrader?.logs">{{ line }}</div>
+        <div *ngFor="let line of logModalTrader?.logs"
+             [class.log-start]="line.includes('START')"
+             [class.log-stop]="line.includes('STOP')">{{ line }}</div>
       </div>
     </div>
   </div>

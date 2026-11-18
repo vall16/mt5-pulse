@@ -203,6 +203,12 @@ export class TraderService {
     );
   }
 
+  clearLogs(traderName: string): Observable<{ status: string; remaining: number }> {
+    return this.http.post<{ status: string; remaining: number }>(
+      `${this.apiUrl}/trade/logs/clear?trader=${encodeURIComponent(traderName)}`, null
+    );
+  }
+
   analyzeTrader(traderId: number, limit: number = 100, source: string = 'db', days: number = 30): Observable<any> {
     return this.http.post(`${this.apiUrl}/db/analyze`, { trader_id: traderId, limit, source, days });
   }

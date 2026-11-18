@@ -1892,3 +1892,15 @@ def get_logs(trader: str = None, limit: int = 200):
     if trader:
         lines = [l for l in lines if trader in l]
     return {"logs": lines[-limit:]}
+
+
+@router.post("/logs/clear")
+def clear_logs(trader: str = None):
+    """Svuota i log, opz. solo quelli del trader indicato."""
+    if trader:
+        to_remove = [l for l in logs if trader in l]
+        for l in to_remove:
+            logs.remove(l)
+    else:
+        logs.clear()
+    return {"status": "ok", "remaining": len(logs)}

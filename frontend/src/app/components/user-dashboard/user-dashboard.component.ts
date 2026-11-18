@@ -201,6 +201,15 @@ export class UserDashboardComponent implements OnInit {
     }
   }
 
+  clearLog() {
+    if (!this.logModalTrader) return;
+    const trader = this.logModalTrader;
+    this.traderService.clearLogs(trader.name).subscribe({
+      next: () => { trader.logs = []; },
+      error: () => {}
+    });
+  }
+
   // 📜 porta lo scroll in fondo alla modale
   private scrollLogToBottom() {
     setTimeout(() => {

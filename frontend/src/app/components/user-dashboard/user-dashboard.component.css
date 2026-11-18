@@ -824,6 +824,12 @@
 .log-modal {
   max-width: 900px;
 }
+.log-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .log-modal-box {
   max-height: 70vh;
   overflow-y: auto;
@@ -832,6 +838,14 @@
 .log-empty {
   color: #888;
   font-style: italic;
+}
+.log-start {
+  color: #22c55e;
+  font-weight: 600;
+}
+.log-stop {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 .profit-tp-row {
