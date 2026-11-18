@@ -17,7 +17,8 @@
       "Bash(net *)",
       "Bash(\"c:\\program files\\mysql\\mysql server 8.4\\bin\\mysqld.exe\" *)",
       "Bash(\"c:\\program files\\mysql\\mysql server 8.4\\bin\\mysql.exe\" *)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(c:\\users\\vallo\\mt5-pulse\\lancia.bat)"
     ]
   },
   "$version": 4
