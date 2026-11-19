@@ -18,7 +18,19 @@
       "Bash(\"c:\\program files\\mysql\\mysql server 8.4\\bin\\mysqld.exe\" *)",
       "Bash(\"c:\\program files\\mysql\\mysql server 8.4\\bin\\mysql.exe\" *)",
       "Bash(npm start)",
-      "Bash(c:\\users\\vallo\\mt5-pulse\\lancia.bat)"
+      "Bash(c:\\users\\vallo\\mt5-pulse\\lancia.bat)",
+      "Bash(arp *)",
+      "Bash(@echo *)",
+      "Bash(ssh *)",
+      "Bash(c:\\users\\vallo\\mt5-pulse\\backend\\venv\\scripts\\python.exe *)",
+      "Bash(c:\\users\\vallo\\mt5-pulse\\backend\\venv\\scripts\\pip.exe *)",
+      "Bash(certutil *)",
+      "Bash(del *)",
+      "Bash(rmdir *)",
+      "Bash(invoke-command *)",
+      "Bash(select-object *)",
+      "Bash(set-item *)",
+      "Bash(scriptblock *)"
     ]
   },
   "$version": 4

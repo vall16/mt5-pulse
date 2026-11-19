@@ -1,6 +1,7 @@
 # Secreti e configurazioni locali
 .env
 .env.*
+LANCIO_REMOTO.md
 
 # Python
 __pycache__/
