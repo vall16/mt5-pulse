@@ -1,0 +1,71 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: mt5pulse_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: trader_db
+      MYSQL_USER: trader
+      MYSQL_PASSWORD: vibe2025
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./trader_db_dump.sql:/docker-entrypoint-initdb.d/dump.sql:ro
+    ports:
+      - "3307:3306"  # host 3307 per non collidere con MySQL locale
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "trader", "-pvibe2025"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: mt5pulse_backend
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: trader
+      MYSQL_PASSWORD: vibe2025
+      MYSQL_DB: trader_db
+      API_HOST: 0.0.0.0
+      API_PORT: "8080"
+      CORS_ORIGINS: http://localhost:4200,http://127.0.0.1:4200
+      MT5_API_URL: http://host.docker.internal:8000
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: mt5pulse_frontend
+    ports:
+      - "4200:4200"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  trading_api:
+    build: ./trading_api
+    container_name: mt5pulse_trading_api
+    environment:
+      REMOTE_MT5_API_URL: http://host.docker.internal:8000/
+      API_PORT: "8000"
+      CORS_ORIGINS: "*"
+    ports:
+      - "9000:8000"
+      - "9001:8001"
+      - "9002:8002"
+      - "9003:8003"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
