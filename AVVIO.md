@@ -1,18 +1,50 @@
 # AVVIO MT5Pulse — guida rapida (Windows)
 
 Tutto il necessario per lanciare la SaaS senza ricominciare le ricerche.
-Ultimo lancio verificato: 2026-10-20.
+Ultimo lancio verificato: 2026-11-19.
 
 ## Servizi e porte
 
 | Servizio | Porta | Note |
 |---|---|---|
-| MySQL 9.4 | 3306 | DB `trader_db`, utente `trader` |
+| MySQL 8.4 | 3306 (locale) / 3307 (Docker) | DB `trader_db`, utente `trader` |
 | Backend (FastAPI) | 8080 | `backend/main.py` |
 | Frontend (Angular) | 4200 | `frontend/` |
 | mt5_api (agente MT5) | 8000-8003 | 4 istanze, `backend/mt5_api/run_multi_instances.py` |
+| trading_api (proxy) | 9000-9003 (Docker) | 4 istanze, proxy verso mt5_api |
 
 Console web: **http://localhost:4200/**
+
+## Lancio con Docker Compose (metodo consigliato)
+
+Prerequisiti: **Docker Desktop** installato e in esecuzione.
+
+```bat
+cd /d C:\Users\vallo\mt5-pulse
+docker compose up -d --build
+```
+
+Avvia in un colpo: MySQL (3307), Backend (8080), Frontend (4200), trading_api (9000-9003).
+
+**mt5_api resta fuori Docker** (Windows-only, richiede terminali MT5):
+```bat
+cd /d C:\Users\vallo\mt5-pulse\backend\mt5_api
+..\venv\Scripts\python.exe run_multi_instances.py
+```
+
+Verifica:
+```bat
+docker compose ps
+curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8000/health
+```
+
+Per fermare tutto:
+```bat
+docker compose down
+```
+
+> Il dump `trader_db_dump.sql` viene importato automaticamente al primo avvio di MySQL (volume `mysql_data`).
 
 ## Prerequisiti già in posto (non rifarli)
 
@@ -22,22 +54,23 @@ Console web: **http://localhost:4200/**
 
 ## ⚠️ Gotcha principale: MySQL NON è un servizio Windows
 
-MySQL 9.4 è installato ma **non registrato come servizio** (`net start MySQL` non funziona).
-Bisogna avviare `mysqld` a mano con la config esistente.
+MySQL 8.4 è installato ma **non registrato come servizio** (`net start MySQL` non funziona).
+Bisogna avviare `mysqld` a mano.
 
-- Install: `C:\Users\vallo\AppData\Local\Programs\MySQL\mysql-9.4.0-winx64`
-- Config: `C:\Users\vallo\AppData\Local\Programs\MySQL\mysql-9.4.0-winx64\my.ini`
-- Datadir: `C:\Users\vallo\AppData\Local\MySQL\data`
+- Install: `C:\Program Files\MySQL\MySQL Server 8.4`
+- Datadir: `C:\ProgramData\MySQL\MySQL Server 8.4\data`
 
-## Lancio manuale (4 terminali)
+> Se usi Docker Compose, MySQL è già gestito dal container (porta 3307) — non serve avviarlo a mano.
+
+## Lancio manuale (fallback, senza Docker)
 
 ### 1) MySQL (in background)
 ```bat
-"C:\Users\vallo\AppData\Local\Programs\MySQL\mysql-9.4.0-winx64\bin\mysqld.exe" --defaults-file="C:\Users\vallo\AppData\Local\Programs\MySQL\mysql-9.4.0-winx64\my.ini"
+"C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe" --no-defaults --datadir="C:\ProgramData\MySQL\MySQL Server 8.4\data" --port=3306 --bind-address=127.0.0.1
 ```
 Verifica (~6 s dopo):
 ```bat
-"C:\Users\vallo\AppData\Local\Programs\MySQL\mysql-9.4.0-winx64\bin\mysql.exe" -u trader -pvibe2025 -h localhost -e "SELECT COUNT(*) FROM trader_db.users;"
+"C:\Program Files\MySQL\MySQL Server 8.4\bin\mysql.exe" -u trader -pvibe2025 -h localhost -e "SELECT COUNT(*) FROM trader_db.users;"
 ```
 → atteso: `2`
 
@@ -92,7 +125,7 @@ curl http://127.0.0.1:8000/health
 ```
 → atteso: `{"status":"ok","mt5_version":"..."}`
 
-## Lancio in un click
+## Lancio in un click (senza Docker)
 
 Usa **`lancia.bat`** (stessa cartella): avvia MySQL, backend, frontend e mt5_api in 4 finestre separate.
 
@@ -109,6 +142,8 @@ Usa **`lancia.bat`** (stessa cartella): avvia MySQL, backend, frontend e mt5_api
 
 ## Note
 
-- Per fermare tutto: chiudere le 4 finestre (o i processi di background). Per MySQL: `mysqladmin -u trader -pvibe2025 shutdown`.
+- **Con Docker**: `docker compose down` ferma MySQL, backend, frontend e trading_api. mt5_api va fermato a parte (chiudere il processo Python).
+- **Senza Docker**: chiudere le 4 finestre (o i processi di background). Per MySQL: `mysqladmin -u trader -pvibe2025 shutdown`.
 - `trading_api/` (proxy) non è usato dal backend nel codice attuale: il backend punta direttamente agli agenti `mt5_api`.
 - Il backend risolve l'URL degli agenti dalla tabella `servers` (DB): per il locale deve puntare a `127.0.0.1:8000` (o la porta giusta).
+- In Docker, il backend raggiunge mt5_api via `host.docker.internal:8000` (configurato nel `docker-compose.yaml`).

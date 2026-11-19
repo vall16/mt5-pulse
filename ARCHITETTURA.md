@@ -8,24 +8,48 @@ Repo con 4 blocchi: `frontend/` (Angular 20), `backend/` (FastAPI "Manager API" 
 Browser Angular :4200
    │  environment.apiUrl → http://127.0.0.1:8080
    ▼
-BACKEND (backend/main.py, porta 8080)  ── MySQL trader_db :3306
+BACKEND (backend/main.py, porta 8080)  ── MySQL trader_db :3306 (locale) / :3307 (Docker)
    │ router: /db /mt5 /trade /adaptive /supervisor /signal-research
    │ URL dei terminali = servers.ip:porta lette dal DB (main.py:68-74, db.py)
+   │ In Docker: MT5_API_URL = host.docker.internal:8000
    ▼
-TRADING_API (opzionale, 4 istanze 8000-8003)  → proxy puro, riscrive su REMOTE_MT5_API_URL
+TRADING_API (opzionale, 4 istanze 9000-9003 in Docker / 8000-8003 locale)
+   → proxy puro, riscrive su REMOTE_MT5_API_URL
    ▼
 MT5_API (backend/mt5_api/main.py, su ogni server Windows con MT5, 8000-8003)
    → lib MetaTrader5 → terminal64.exe → broker
+   (fuori Docker — Windows-only)
 ```
 
 ## Avvio dei servizi
 
+### Con Docker Compose (consigliato)
+
+```bash
+docker compose up -d --build   # MySQL + backend + frontend + trading_api
+```
++ mt5_api a parte (Windows-only):
+```bash
+cd backend/mt5_api && python run_multi_instances.py
+```
+
+| Servizio | Porta host | Note |
+|---|---|---|
+| MySQL (container) | 3307 | auto-import dump al primo avvio |
+| Backend (container) | 8080 | raggiunge mt5_api via `host.docker.internal:8000` |
+| Frontend (container) | 4200 | nginx, build Angular in Dockerfile multi-stage |
+| trading_api (container) | 9000-9003 | proxy verso mt5_api |
+| mt5_api (host) | 8000-8003 | fuori Docker, Windows-only |
+
+### Manuale (senza Docker)
+
 | Servizio | Comando | Porta |
 |---|---|---|
-| Backend | `python main.py` (o Docker `uvicorn main:app`) | 8080 (`.env` API_HOST/API_PORT) |
-| Frontend | `npm start` (`ng serve`, nessun proxy) | 4200 |
-| mt5_api | `python main.py <MT5_PATH> <host:porta>` o `run_multi_instances.py` | 8000-8003, solo Windows |
-| trading_api | `docker compose up -d` → `run_multi_instances.py` | 8000-8003 |
+| MySQL | `mysqld --no-defaults --datadir=... --port=3306` | 3306 |
+| Backend | `python main.py` | 8080 |
+| Frontend | `npm start` (`ng serve`) | 4200 |
+| mt5_api | `run_multi_instances.py` | 8000-8003, solo Windows |
+| trading_api | `run_multi_instances.py` | 8000-8003 |
 
 Lo startup del backend esegue `run_migrations()` (`main.py:44`); CORS ammette `:4200`.
 
@@ -86,4 +110,4 @@ In pratica è il "braccio" distribuito, mentre il backend è il "cervello" centr
 - `ai_analysis.py:10` usa `MT5_API_URL` default `http://127.0.0.1:8081`, incoerente con le porte 8000-8003.
 - `@supabase/supabase-js` è in `frontend/package.json` ma inutilizzato nel codice `src/`; le migration SQL in `frontend/supabase/` restano orfane. L'autenticazione passa da `POST /db/login` (MySQL).
 - La cartella `backend/routers/` contiene file vuoti (0 byte), inutilizzata.
-- Unico compose del repo: `trading_api/docker-compose.yaml` (mancano compose per backend e mt5_api, e manca `.env` in `trading_api/`).
+- Compose unificato a livello root (`docker-compose.yaml`): MySQL, backend, frontend, trading_api. `trading_api/docker-compose.yaml` resta come compose standalone. `backend/mt5_api` non è in Docker (Windows-only).
