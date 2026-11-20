@@ -32,7 +32,8 @@
       "Bash(set-item *)",
       "Bash(scriptblock *)",
       "Bash(move *)",
-      "Bash(backend\\venv\\scripts\\python.exe *)"
+      "Bash(backend\\venv\\scripts\\python.exe *)",
+      "Bash(catch *)"
     ]
   },
   "$version": 4

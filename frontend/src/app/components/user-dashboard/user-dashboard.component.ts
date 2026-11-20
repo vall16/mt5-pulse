@@ -67,6 +67,7 @@ export class UserDashboardComponent implements OnInit {
 
   availableSignals = [
   { value: 'SUPER', label: 'XAUUSD Super' },
+  { value: 'SUPER_DM', label: 'XAUUSD Super DM' },
   { value: 'SUPER_LIVE', label: 'XAUUSD Super Live' },
   { value: 'SUPER_PRO', label: 'XAUUSD Super Pro' },
   { value: 'LONDON_BREAKOUT', label: 'XAUUSD London Breakout' },

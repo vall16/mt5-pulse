@@ -1782,10 +1782,245 @@ class LondonBreakoutStrategy(SignalStrategy):
         return f"(Asian H:{ah} L:{al} Range:{rng} Vol:{'OK' if ind.volume_ok else '-'} London:{ind.in_london})"
 
 
+# ─────────────────────── SUPER DM: Decision Model ───────────────────────
+
+class SuperXauDecisionStrategy(SignalStrategy):
+    """
+    SUPER + Decision Model: stesso set di indicatori di SUPER, ma la decisione
+    non è booleana — è un punteggio pesato multi-fattore con soglia di confidenza.
+    Trade solo se score >= threshold (default 0.65).
+    """
+    name = "SUPER_DM"
+    requires_m1 = True
+    requires_m5 = True
+    requires_m15 = True
+
+    # Pesi dei fattori (somma = 1.0)
+    W_MOMENTUM = 0.30
+    W_TREND = 0.30
+    W_VOLATILITY = 0.25
+    W_RSI = 0.15
+
+    THRESHOLD = 0.65
+
+    def __init__(self, regime_filter=True, threshold=None):
+        self.regime_filter = regime_filter
+        if threshold is not None:
+            self.THRESHOLD = threshold
+
+    def compute_indicators(self, df_m1, df_m5, df_m15, df_h1=None):
+        # Identico a SUPER
+        ema_fast = compute_ema(df_m1, 9).iloc[-2]
+        ema_slow = compute_ema(df_m1, 21).iloc[-2]
+        rsi_m1 = compute_rsi(df_m1, 14).iloc[-2]
+        macd, macd_sig = compute_macd(df_m1)
+
+        hma_m5 = compute_hma(df_m5).iloc[-2]
+        hma_m5_prev = compute_hma(df_m5).iloc[-3]
+
+        ema_m15_series = compute_ema(df_m15, 50)
+        ema_m15 = ema_m15_series.iloc[-2]
+        price_m15 = df_m15["close"].iloc[-2]
+
+        atr_series = compute_atr(df_m1)
+        atr = atr_series.iloc[-2]
+        atr_prev_mean = atr_series.rolling(10).mean().shift(1).iloc[-2]
+        volatility_expansion = atr > atr_prev_mean
+
+        candle_body = abs(df_m1["close"].iloc[-2] - df_m1["open"].iloc[-2])
+        is_spike = candle_body > (atr * 4)
+
+        df_m5_tmp = df_m5.copy()
+        df_m5_tmp["prev_close"] = df_m5_tmp["close"].shift(1)
+        df_m5_tmp["tr"] = df_m5_tmp.apply(lambda r: max(
+            r["high"] - r["low"],
+            abs(r["high"] - r["prev_close"]),
+            abs(r["low"] - r["prev_close"])
+        ), axis=1)
+        atr_m5_val = df_m5_tmp["tr"].rolling(14).mean().iloc[-2]
+
+        atr_m15_series = compute_atr(df_m15)
+        atr_m15 = atr_m15_series.iloc[-2]
+        atr_m15_pct = compute_rolling_percentile(atr_m15_series, REGIME_WINDOW).iloc[-2]
+        ema_m15_prev = ema_m15_series.iloc[-10]
+        if atr_m15 > 0 and pd.notna(atr_m15):
+            trend_score = (ema_m15 - ema_m15_prev) / atr_m15
+        else:
+            trend_score = 0.0
+        regime = compute_regime(atr_m15_pct, trend_score, is_spike)
+
+        return Indicators(
+            ema_fast=ema_fast,
+            ema_slow=ema_slow,
+            rsi_m1=rsi_m1,
+            macd=macd.iloc[-2],
+            macd_sig=macd_sig.iloc[-2],
+            hma_m5=hma_m5,
+            hma_m5_prev=hma_m5_prev,
+            trend_macro_up=price_m15 > ema_m15,
+            volatilty_expansion=volatility_expansion,
+            is_spike=is_spike,
+            atr_m5_val=atr_m5_val,
+            atr_m15_pct=atr_m15_pct,
+            trend_score=trend_score,
+            regime=regime,
+        )
+
+    # ── Scoring ──
+
+    def _score_buy(self, ind: Indicators) -> tuple[float, dict]:
+        """Ritorna (score 0..1, breakdown per fattore)."""
+        breakdown = {}
+
+        # 1. MOMENTUM (30%): MACD + RSI direzionale
+        mom = 0.0
+        if ind.macd > ind.macd_sig:
+            mom += 0.5
+        if 45 < ind.rsi_m1 < 80:
+            mom += 0.5
+        breakdown["momentum"] = mom
+
+        # 2. TREND (30%): EMA cross + HMA + macro
+        tr = 0.0
+        if ind.ema_fast > ind.ema_slow:
+            tr += 0.4
+        if ind.hma_m5 > ind.hma_m5_prev:
+            tr += 0.3
+        if ind.trend_macro_up:
+            tr += 0.3
+        breakdown["trend"] = tr
+
+        # 3. VOLATILITY (25%): ATR expansion + no spike + regime
+        vol = 0.0
+        if ind.volatilty_expansion:
+            vol += 0.4
+        if not ind.is_spike:
+            vol += 0.3
+        if not self.regime_filter or regime_ok(ind.regime):
+            vol += 0.3
+        breakdown["volatility"] = vol
+
+        # 4. RSI POSITION (15%): non overbought
+        rsi_hi = 80 if ind.regime == "TREND" else 70
+        if 45 < ind.rsi_m1 < rsi_hi:
+            rsi_s = 1.0
+        elif 40 < ind.rsi_m1 <= 45 or rsi_hi <= ind.rsi_m1 < rsi_hi + 10:
+            rsi_s = 0.5
+        else:
+            rsi_s = 0.0
+        breakdown["rsi"] = rsi_s
+
+        score = (
+            self.W_MOMENTUM * breakdown["momentum"]
+            + self.W_TREND * breakdown["trend"]
+            + self.W_VOLATILITY * breakdown["volatility"]
+            + self.W_RSI * breakdown["rsi"]
+        )
+        return score, breakdown
+
+    def _score_sell(self, ind: Indicators) -> tuple[float, dict]:
+        """Ritorna (score 0..1, breakdown per fattore)."""
+        breakdown = {}
+
+        # 1. MOMENTUM (30%)
+        mom = 0.0
+        if ind.macd < ind.macd_sig:
+            mom += 0.5
+        if 20 < ind.rsi_m1 < 55:
+            mom += 0.5
+        breakdown["momentum"] = mom
+
+        # 2. TREND (30%)
+        tr = 0.0
+        if ind.ema_fast < ind.ema_slow:
+            tr += 0.4
+        if ind.hma_m5 < ind.hma_m5_prev:
+            tr += 0.3
+        if not ind.trend_macro_up:
+            tr += 0.3
+        breakdown["trend"] = tr
+
+        # 3. VOLATILITY (25%)
+        vol = 0.0
+        if ind.volatilty_expansion:
+            vol += 0.4
+        if not ind.is_spike:
+            vol += 0.3
+        if not self.regime_filter or regime_ok(ind.regime):
+            vol += 0.3
+        breakdown["volatility"] = vol
+
+        # 4. RSI POSITION (15%): non oversold
+        rsi_lo = 25 if ind.regime == "TREND" else 30
+        if rsi_lo < ind.rsi_m1 < 55:
+            rsi_s = 1.0
+        elif rsi_lo - 10 < ind.rsi_m1 <= rsi_lo or 55 <= ind.rsi_m1 < 60:
+            rsi_s = 0.5
+        else:
+            rsi_s = 0.0
+        breakdown["rsi"] = rsi_s
+
+        score = (
+            self.W_MOMENTUM * breakdown["momentum"]
+            + self.W_TREND * breakdown["trend"]
+            + self.W_VOLATILITY * breakdown["volatility"]
+            + self.W_RSI * breakdown["rsi"]
+        )
+        return score, breakdown
+
+    # ── Override condizioni ──
+
+    def buy_condition(self, ind: Indicators) -> bool:
+        score, _ = self._score_buy(ind)
+        ind._dm_score = score
+        ind._dm_breakdown = _
+        return score >= self.THRESHOLD
+
+    def sell_condition(self, ind: Indicators) -> bool:
+        score, _ = self._score_sell(ind)
+        ind._dm_score = score
+        ind._dm_breakdown = _
+        return score >= self.THRESHOLD
+
+    def reverse_on_buy(self, has_sell: bool) -> bool:
+        return False
+
+    def reverse_on_sell(self, has_buy: bool) -> bool:
+        return False
+
+    def get_dynamic_sl_tp(self, ind: Indicators):
+        regime = getattr(ind, "regime", "NORMAL")
+        if not regime_ok(regime):
+            return None, None
+        atr = ind.atr_m5_val
+        if atr <= 0:
+            return None, None
+        if regime == "TREND":
+            sl_f, tp_f = 2.0, 3.0
+        else:
+            sl_f, tp_f = 1.5, 2.2
+        sl = int(atr * sl_f * 100)
+        tp = int(atr * tp_f * 100)
+        sl = max(500, min(sl, 2000))
+        tp = max(sl + 100, min(tp, 3000))
+        return sl, tp
+
+    def get_log_details(self, ind: Indicators) -> str:
+        atr = ind.atr_m5_val
+        score = getattr(ind, "_dm_score", None)
+        bd = getattr(ind, "_dm_breakdown", None)
+        if score is not None and bd:
+            score_str = f" SCORE:{score:.2f} [M:{bd['momentum']:.1f} T:{bd['trend']:.1f} V:{bd['volatility']:.1f} R:{bd['rsi']:.1f}]"
+        else:
+            score_str = ""
+        return f"(ATR:{atr:.1f} REG:{getattr(ind, 'regime', 'NORMAL')}{score_str})"
+
+
 STRATEGIES = {
     "BASE_NOHOLD": NoReverseStrategy(),
     "EURUSD_NOHOLD": EurUsdStrategy(),
     "SUPER": SuperXauNoCloseStrategy(),
+    "SUPER_DM": SuperXauDecisionStrategy(),
     "SUPER_PRO": SuperXauProStrategy(),
     "SUPER_LIVE": SuperXauLiveStrategy(),
     "ICHIMOKU": IchimokuXauStrategy(),
