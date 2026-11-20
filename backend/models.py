@@ -96,6 +96,9 @@ class Trader(BaseModel):
     # 🆕 Forza SL/TP dal form
     use_signal_sl_tp: bool = False
 
+    # 🆕 Note libere sul trader
+    notes: Optional[str] = None
+
 
 class Newtrader(BaseModel):
     
@@ -163,5 +166,8 @@ class TraderServersUpdate(BaseModel):
 
     # 🆕 direction filter
     direction_filter: str | None = None
+
+    # 🆕 note libere
+    notes: str | None = None
 
 

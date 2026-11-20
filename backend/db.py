@@ -196,6 +196,23 @@ def run_migrations():
     except Exception as e:
         log(f"⚠️ Migration sessions_filter saltata: {e}")
 
+    # Migration: aggiungi notes ai traders se manca
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SHOW COLUMNS FROM traders WHERE Field='notes'")
+        if not cursor.fetchone():
+            log("🔧 Migration: aggiungo colonna notes a traders...")
+            cursor.execute("ALTER TABLE traders ADD COLUMN notes TEXT NULL")
+            conn.commit()
+            log("✅ Migration completata: notes aggiunta")
+        else:
+            log("✅ Migration notes già applicata")
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        log(f"⚠️ Migration notes saltata: {e}")
+
     # Migration: aggiungi sort_order ai servers se manca
     for attempt in range(3):
         try:
@@ -796,9 +813,16 @@ def update_trader_servers(trader_id: int, update: TraderServersUpdate):
         except Exception:
             pass
 
+    if update.notes is not None:
+        try:
+            cursor.execute("SHOW COLUMNS FROM traders WHERE Field='notes'")
+            if cursor.fetchone():
+                fields.append("notes = %s")
+                values.append(update.notes)
+        except Exception:
+            pass
 
-
-    # 🔹 Se non c’è nulla da aggiornare, ritorna il trader com’è
+    # 🔹 Se non c'è nulla da aggiornare, ritorna il trader com'è
     if not fields:
         cursor.close()
         conn.close()

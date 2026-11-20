@@ -441,6 +441,15 @@ class SignalStrategy:
         # ── direction filter ──
         direction_filter = getattr(trader, 'direction_filter', 'both')
 
+        # ── SL/TP effettivi per il log ──
+        use_signal_sl_tp = getattr(trader, 'use_signal_sl_tp', False)
+        if use_signal_sl_tp:
+            ind._final_sl = int(trader.sl) if trader.sl else 0
+            ind._final_tp = int(trader.tp) if trader.tp else 0
+        else:
+            ind._final_sl = effective_sl if effective_sl is not None else (int(trader.sl) if trader.sl else 0)
+            ind._final_tp = effective_tp if effective_tp is not None else (int(trader.tp) if trader.tp else 0)
+
         # ── decisione ──
         new_signal = "HOLD"
         log_details = self.get_log_details(ind)
@@ -653,9 +662,17 @@ class SuperXauNoCloseStrategy(SignalStrategy):
 
     def get_log_details(self, ind: Indicators) -> str:
         atr = ind.atr_m5_val
-        sl_dyn = int(atr * 2.0 * 100) if atr > 0 else 0
-        tp_dyn = int(atr * 3.0 * 100) if atr > 0 else 0
-        return f"(ATR M5: {atr:.1f} SL:{sl_dyn} TP:{tp_dyn} REG:{getattr(ind, 'regime', 'NORMAL')})"
+        regime = getattr(ind, 'regime', 'NORMAL')
+        sl_dyn = getattr(ind, '_final_sl', None)
+        tp_dyn = getattr(ind, '_final_tp', None)
+        if sl_dyn is None:
+            if atr > 0:
+                sl_f, tp_f = (2.0, 3.0) if regime == "TREND" else (1.5, 2.2)
+                sl_dyn = max(500, min(int(atr * sl_f * 100), 2000))
+                tp_dyn = max(sl_dyn + 100, min(int(atr * tp_f * 100), 3000))
+            else:
+                sl_dyn, tp_dyn = 0, 0
+        return f"(ATR M5: {atr:.1f} SL:{sl_dyn} TP:{tp_dyn} REG:{regime})"
 
     def get_log_header(self, ind: Indicators) -> str:
         details = self.get_log_details(ind)
@@ -1801,7 +1818,7 @@ class SuperXauDecisionStrategy(SignalStrategy):
     W_VOLATILITY = 0.25
     W_RSI = 0.15
 
-    THRESHOLD = 0.65
+    THRESHOLD = 0.70
 
     def __init__(self, regime_filter=True, threshold=None):
         self.regime_filter = regime_filter
@@ -2007,13 +2024,23 @@ class SuperXauDecisionStrategy(SignalStrategy):
 
     def get_log_details(self, ind: Indicators) -> str:
         atr = ind.atr_m5_val
+        regime = getattr(ind, 'regime', 'NORMAL')
+        sl_dyn = getattr(ind, '_final_sl', None)
+        tp_dyn = getattr(ind, '_final_tp', None)
+        if sl_dyn is None:
+            if atr > 0:
+                sl_f, tp_f = (2.0, 3.0) if regime == "TREND" else (1.5, 2.2)
+                sl_dyn = max(500, min(int(atr * sl_f * 100), 2000))
+                tp_dyn = max(sl_dyn + 100, min(int(atr * tp_f * 100), 3000))
+            else:
+                sl_dyn, tp_dyn = 0, 0
         score = getattr(ind, "_dm_score", None)
         bd = getattr(ind, "_dm_breakdown", None)
         if score is not None and bd:
             score_str = f" SCORE:{score:.2f} [M:{bd['momentum']:.1f} T:{bd['trend']:.1f} V:{bd['volatility']:.1f} R:{bd['rsi']:.1f}]"
         else:
             score_str = ""
-        return f"(ATR:{atr:.1f} REG:{getattr(ind, 'regime', 'NORMAL')}{score_str})"
+        return f"(ATR:{atr:.1f} SL:{sl_dyn} TP:{tp_dyn} REG:{regime}{score_str})"
 
 
 STRATEGIES = {

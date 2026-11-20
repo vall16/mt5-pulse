@@ -74,6 +74,9 @@ export interface Trader {
 
   // 🆕 Forza SL/TP dal form (non salvato in DB)
   use_signal_sl_tp?: boolean;
+
+  // 🆕 Note libere sul trader
+  notes?: string;
 }
 
 export interface NewTrader {

@@ -143,6 +143,7 @@ export class TraderService {
     custom_signal_interval?: number | null,
     selected_symbol?: string | null,
     sessions_filter?: string | null,
+    notes?: string | null,
     // copyInterval?: number | null
 
   ) {
@@ -160,6 +161,7 @@ export class TraderService {
       custom_signal_interval: custom_signal_interval,
       selected_symbol: selected_symbol,
       sessions_filter: sessions_filter,
+      notes: notes,
       // copy_interval: copyInterval
 
     });
