@@ -30,7 +30,9 @@
       "Bash(invoke-command *)",
       "Bash(select-object *)",
       "Bash(set-item *)",
-      "Bash(scriptblock *)"
+      "Bash(scriptblock *)",
+      "Bash(move *)",
+      "Bash(backend\\venv\\scripts\\python.exe *)"
     ]
   },
   "$version": 4

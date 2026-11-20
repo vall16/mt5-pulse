@@ -26,51 +26,60 @@ async def manager_check_server(payload: dict):
         return {"connected": False, "error": "Errore sconosciuto durante il check del server"}
 
 
-class ServerRequest(BaseModel):
-    server: str
-    platform: str
-    ip: str
-    port: int
-    path: str  # path completo al terminale MT5
-    user: str     
-    pwd: str
+class ServerStartRequest(BaseModel):
+    id: int
 
 
 @router.post("/start_server")
-async def start_server(server: ServerRequest):
+async def start_server(req: ServerStartRequest):
     """
     Ordina all'agente remoto di avviare MT5 e lo inizializza.
+    Le credenziali (pwd) sono lette dal DB per id: il client non le invia.
     """
     import requests
     from fastapi import HTTPException
+    from db import get_connection
+
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT id, user, pwd, server, ip, port, path FROM servers WHERE id = %s",
+        (req.id,)
+    )
+    server = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    if not server:
+        raise HTTPException(status_code=404, detail="Server non trovato")
 
     # MAX_WAIT = 90  # secondi massimi di attesa
     # SLEEP_INTERVAL = 2  # intervallo tra i poll
 
 
-    print(f"🚀 Richiesta avvio terminale MT5 su agente {server.ip}:{server.port}")
+    print(f"🚀 Richiesta avvio terminale MT5 su agente {server['ip']}:{server['port']}")
 
     # URL dell'agente remoto/locale
-    agent_url_start = f"http://{server.ip}:{server.port}/start_mt5"
-    agent_url_init = f"http://{server.ip}:{server.port}/init-mt5"
+    agent_url_start = f"http://{server['ip']}:{server['port']}/start_mt5"
+    agent_url_init = f"http://{server['ip']}:{server['port']}/init-mt5"
 
-    agent_url_login = f"http://{server.ip}:{server.port}/login"
+    agent_url_login = f"http://{server['ip']}:{server['port']}/login"
 
 
     # Payload per start_mt5
     payload_start = {
-        "path": server.path
+        "path": server["path"]
     }
 
     # Payload per init-mt5
     payload_init = {
-        "path": server.path
+        "path": server["path"]
     }
 
     payload_login = {
-        "login": server.user,
-        "password": server.pwd,
-        "server": server.server
+        "login": server["user"],
+        "password": server["pwd"],
+        "server": server["server"]
     }
 
     try:
@@ -96,9 +105,9 @@ async def start_server(server: ServerRequest):
 
         return {
             "status": "success",
-            "agent": f"{server.ip}:{server.port}",
+            "agent": f"{server['ip']}:{server['port']}",
             "message": "MT5 avviato e inizializzato tramite agente remoto",
-            "server_path": server.path,
+            "server_path": server["path"],
             "init_response": response_init.json()
         }
 

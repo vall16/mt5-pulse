@@ -19,7 +19,6 @@ class LoginResponse(BaseModel):
 class ServerResponse(BaseModel):
     id: int
     user: str
-    pwd: str
     server: str
     server_alias: Optional[str] = None 
     platform: str

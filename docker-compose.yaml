@@ -3,17 +3,17 @@ services:
     image: mysql:8.4
     container_name: mt5pulse_mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: trader_db
-      MYSQL_USER: trader
-      MYSQL_PASSWORD: vibe2025
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - mysql_data:/var/lib/mysql
       - ./trader_db_dump.sql:/docker-entrypoint-initdb.d/dump.sql:ro
     ports:
       - "3307:3306"  # host 3307 per non collidere con MySQL locale
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "trader", "-pvibe2025"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -25,8 +25,8 @@ services:
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
-      MYSQL_USER: trader
-      MYSQL_PASSWORD: vibe2025
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       MYSQL_DB: trader_db
       API_HOST: 0.0.0.0
       API_PORT: "8080"
@@ -40,6 +40,11 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   frontend:
@@ -49,6 +54,11 @@ services:
       - "4200:4200"
     depends_on:
       - backend
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4200"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   trading_api:
@@ -65,6 +75,11 @@ services:
       - "9003:8003"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
 volumes:

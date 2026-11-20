@@ -1,7 +1,7 @@
 export interface Server {
   id?: number;
   user: string;
-  pwd: string;
+  pwd?: string;
   server: string;
   server_alias:string;
   platform: string;
