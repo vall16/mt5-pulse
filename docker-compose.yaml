@@ -61,26 +61,5 @@ services:
       retries: 3
     restart: unless-stopped
 
-  trading_api:
-    build: ./trading_api
-    container_name: mt5pulse_trading_api
-    environment:
-      REMOTE_MT5_API_URL: http://host.docker.internal:8000/
-      API_PORT: "8000"
-      CORS_ORIGINS: "*"
-    ports:
-      - "9000:8000"
-      - "9001:8001"
-      - "9002:8002"
-      - "9003:8003"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
-
 volumes:
   mysql_data:

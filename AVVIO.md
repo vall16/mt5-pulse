@@ -11,7 +11,6 @@ Ultimo lancio verificato: 2026-11-19.
 | Backend (FastAPI) | 8080 | `backend/main.py` |
 | Frontend (Angular) | 4200 | `frontend/` |
 | mt5_api (agente MT5) | 8000-8003 | 4 istanze, `backend/mt5_api/run_multi_instances.py` |
-| trading_api (proxy) | 9000-9003 (Docker) | 4 istanze, proxy verso mt5_api |
 
 Console web: **http://localhost:4200/**
 
@@ -24,7 +23,7 @@ cd /d C:\Users\vallo\mt5-pulse
 docker compose up -d --build
 ```
 
-Avvia in un colpo: MySQL (3307), Backend (8080), Frontend (4200), trading_api (9000-9003).
+Avvia in un colpo: MySQL (3307), Backend (8080), Frontend (4200).
 
 **mt5_api resta fuori Docker** (Windows-only, richiede terminali MT5):
 ```bat
@@ -127,7 +126,7 @@ curl http://127.0.0.1:8000/health
 
 ## Lancio in un click (senza Docker)
 
-Usa **`lancia.bat`** (stessa cartella): avvia MySQL, backend, frontend e mt5_api in 4 finestre separate.
+Usa **`LANCIA.bat`** (stessa cartella): avvia MySQL, backend, frontend e mt5_api in 4 finestre separate.
 
 ## Se qualcosa non parte
 
@@ -142,8 +141,7 @@ Usa **`lancia.bat`** (stessa cartella): avvia MySQL, backend, frontend e mt5_api
 
 ## Note
 
-- **Con Docker**: `docker compose down` ferma MySQL, backend, frontend e trading_api. mt5_api va fermato a parte (chiudere il processo Python).
+- **Con Docker**: `docker compose down` ferma MySQL, backend e frontend. mt5_api va fermato a parte (chiudere il processo Python).
 - **Senza Docker**: chiudere le 4 finestre (o i processi di background). Per MySQL: `mysqladmin -u trader -pvibe2025 shutdown`.
-- `trading_api/` (proxy) non è usato dal backend nel codice attuale: il backend punta direttamente agli agenti `mt5_api`.
-- Il backend risolve l'URL degli agenti dalla tabella `servers` (DB): per il locale deve puntare a `127.0.0.1:8000` (o la porta giusta).
+- Il backend risolve l'URL degli agenti dalla tabella `servers` (DB): per il locale deve puntare a `127.0.0.1:8000` (o la porta giusta). Non esiste un proxy intermedio: il backend parla direttamente con `mt5_api`.
 - In Docker, il backend raggiunge mt5_api via `host.docker.internal:8000` (configurato nel `docker-compose.yaml`).

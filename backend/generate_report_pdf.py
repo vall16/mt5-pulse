@@ -113,7 +113,7 @@ table(pdf,
       [
           ["backend/", "FastAPI (Python) + MySQL", "Manager: API centrale, DB, strategie, supervisione AI"],
           ["frontend/", "Angular 20 (standalone) + Supabase", "UI web per gestione trader/server, trading, backtest"],
-          ["trading_api/ + backend/mt5_api/", "FastAPI + libreria MetaTrader5", "Agente slave: gira su ogni server con MT5 installato (solo Windows), espone dati e invia ordini"],
+          ["backend/mt5_api/", "FastAPI + libreria MetaTrader5", "Agente slave: gira su ogni server con MT5 installato (solo Windows), espone dati e invia ordini"],
       ],
       widths=[52, 70, 68])
 body(pdf, "Flusso master/slave: il manager (backend) comunica via HTTP con gli agenti MT5 remoti, che a loro volta "
@@ -361,12 +361,12 @@ bullets(pdf, [
     "Solo Windows per gli agenti MT5 (libreria MetaTrader5).",
     "Configurazione tramite file .env (credenziali MySQL, OpenRouter API key, CORS).",
     "Il supervisor e le analisi AI funzionano anche senza OPENROUTER_API_KEY (fallback a sole regole di sicurezza).",
-    "Deployment Docker: docker-compose.yaml unificato (MySQL 8.4 + backend + frontend + trading_api). "
+    "Deployment Docker: docker-compose.yaml unificato (MySQL 8.4 + backend + frontend). "
     "mt5_api escluso (Windows-only, gira nativo).",
     "Deployment remoto: server Ubuntu (192.168.1.183) per backend/frontend/MySQL, Windows (192.168.1.180) per mt5_api. "
     "Guida in LANCIO_REMOTO.md.",
 ])
 
-out = r"C:\Users\vallo\mt5-pulse\REPORT_MT5PULSE.pdf"
+out = r"C:\Users\vallo\mt5-pulse\REPORT.pdf"
 pdf.output(out)
 print("OK ->", out)
