@@ -124,15 +124,17 @@ section_title(pdf, "3. Funzionalita principali")
 sub_title(pdf, "3.1 Gestione trader e server")
 bullets(pdf, [
     "Registrazione dei server MT5 (avvio / init / login remoto del terminale via /mt5/start_server).",
+    "Server: alias di visualizzazione, path terminale MT5, ordinamento drag&drop (sort_order).",
     "Creazione di 'trader': account configurato con server master/slave, simbolo, strategia, SL/TP, lotto, moltiplicatore e sessione di trading (ASIA / LONDON / NY-LON / NY / OFF).",
+    "Filtri per trader: direction filter (buy/sell/both), session filter, blocco notturno, profit TP locale, intervallo polling custom, note libere.",
     "Copy-trading automatico (copia ordini da master a slave).",
     "Autenticazione utente (login, bcrypt) e supporto Supabase.",
 ])
 
-sub_title(pdf, "3.2 Strategie di trading automatico (16 strategie)")
+sub_title(pdf, "3.2 Strategie di trading automatico (18 strategie)")
 body(pdf, "In trading_signals_multi2.py, implementate con pattern strategy pattern: BASE, BASE_NOHOLD, TRENDGUARD, "
-          "TRENDGUARD_XAU, EURUSD_NOHOLD, SUPER, SUPER_PRO, SUPER_LIVE, ICHIMOKU, MSFT, NVDA, SUPER_USDJPY, GBPUSD, "
-          "GBPJPY, AUDJPY, SCALPER_M1.")
+          "TRENDGUARD_XAU, EURUSD_NOHOLD, SUPER, SUPER_DM, SUPER_PRO, SUPER_LIVE, ICHIMOKU, MSFT, NVDA, "
+          "SUPER_USDJPY, GBPUSD, GBPJPY, AUDJPY, SCALPER_M1, LONDON_BREAKOUT.")
 body(pdf, "Ogni trader avvia un polling loop (intervallo configurabile, default 5s) che analizza i dati tramite indicatori "
           "tecnici (EMA, RSI, MACD, ATR, Bollinger, HMA, ADX, Ichimoku) e piazza ordini. Logica SL/TP dinamica via ATR M5 "
           "con override fisso configurabile.")
@@ -157,7 +159,13 @@ bullets(pdf, [
 sub_title(pdf, "3.5 Adaptive Agent")
 body(pdf, "Agente che monitora i trade chiusi e adatta automaticamente i fattori SL/TP (ATR) tramite regole if/else.")
 
-section_title(pdf, "4. Le 16 strategie in dettaglio")
+sub_title(pdf, "3.6 AI Analysis (analisi trade con LLM)")
+body(pdf, "Modulo ai_analysis.py: analizza i trade chiusi di un trader (da DB o direttamente da MT5 history) e "
+          "genera un report strutturato via LLM (OpenRouter). Calcola metriche complete (win rate, expectancy, "
+          "drawdown, distribuzione per simbolo e per direzione) e produce un'analisi testuale con pattern rilevati, "
+          "punti di forza/debolezza e suggerimenti concreti su SL/TP e gestione del rischio.")
+
+section_title(pdf, "4. Le 18 strategie in dettaglio")
 
 sub_title(pdf, "4.0 Framework comune")
 body(pdf, "Tutte le strategie derivano dalla classe base SignalStrategy in trading_signals_multi2.py. "
@@ -234,6 +242,17 @@ strategy_block(pdf, "SUPER", "XAUUSD", "M1 + M5 + M15",
     "Non inverte posizione (reverse_on_buy/sell = False) e non chiude su HOLD: esce solo con SL/TP o segnale opposto.",
     "SL/TP dinamici proporzionali all'ATR M5 e al regime: in TREND 2.0x/3.0x ATR, altrimenti 1.5x/2.2x. Valori "
     "clampati tra 500-2000 (SL) e 600-3000 (TP).")
+
+strategy_block(pdf, "SUPER_DM", "XAUUSD", "M1 + M5 + M15",
+    "SUPER + Decision Model: stesso set di indicatori di SUPER, ma la decisione non e booleana -- e un punteggio "
+    "pesato multi-fattore con soglia di confidenza. Trade solo se score >= 0.70. Filtra i segnali deboli che "
+    "passano la logica booleana di SUPER.",
+    "Stessi indicatori di SUPER (EMA9/21 M1, MACD, HMA M5, EMA50 M15, RSI, ATR, regime). Il punteggio e calcolato "
+    "su 4 fattori: MOMENTUM (30%: MACD + RSI direzionale), TREND (30%: EMA cross + HMA + macro), VOLATILITY "
+    "(25%: ATR expansion + no spike + regime ok), RSI POSITION (15%: non overbought). Se la somma pesata >= 0.70 "
+    "il segnale scatta; altrimenti HOLD.",
+    "Non inverte e non chiude su HOLD: esce solo con SL/TP o segnale opposto (come SUPER).",
+    "SL/TP dinamici identici a SUPER: 1.5x/2.2x ATR M5 (NORMAL) o 2.0x/3.0x (TREND), clamp 500-2000 / 600-3000.")
 
 strategy_block(pdf, "SUPER_PRO", "XAUUSD", "M1 + M5 + M15",
     "Evoluzione di SUPER con filtri piu stringenti: trend macro filtrato da EMA200 M15 (anziche EMA50) piu conferma "
@@ -315,6 +334,15 @@ strategy_block(pdf, "SCALPER_M1", "EURUSD", "M1",
     "Non inverte e non chiude su HOLD; esce con SL/TP.",
     "SL/TP fissi 120 / 250 punti (12 pips SL, 25 pips TP su EURUSD).")
 
+strategy_block(pdf, "LONDON_BREAKOUT", "XAUUSD", "M5",
+    "Tradà il breakout del range asiatico all'apertura di Londra. Range asiatico: 00:00-07:00 UTC. "
+    "Finestra di trading: 07:00-11:00 UTC. Sfrutta l'esplosione di volatilita' tipica dell'apertura europea.",
+    "Solo nella finestra di Londra (07:00-11:00 UTC). BUY quando il close M5 supera il massimo del range asiatico "
+    "con volume > 1.5x la media a 20 candele. SELL quando il close M5 scende sotto il minimo del range asiatico "
+    "con volume > 1.5x media. No spike (corpo candela < 3x ATR M5).",
+    "Time-based exit: chiude la posizione dopo 4 ore (14400s) se ancora aperta. SL/TP come backup.",
+    "SL: distanza dal centro del range asiatico (clamp 200-1500). TP: 1.5x l'altezza del range (min SL+100, max 3000).")
+
 section_title(pdf, "5. Frontend (pagina web)")
 table(pdf,
       ["Pagina", "Funzione"],
@@ -324,6 +352,7 @@ table(pdf,
           ["History", "Storico dei trade"],
           ["Backtest / Signal Research / Auto Signal", "UI per backtest e ottimizzazione dei parametri"],
           ["Traders & Servers", "Griglia trader drag&drop, gestione SL/TP, sessione, segnali, pannello Supervisor AI"],
+          ["AI Analysis", "Report LLM per trader: metriche, pattern, suggerimenti (da DB o MT5 history)"],
       ],
       widths=[80, 110])
 
@@ -332,8 +361,12 @@ bullets(pdf, [
     "Solo Windows per gli agenti MT5 (libreria MetaTrader5).",
     "Configurazione tramite file .env (credenziali MySQL, OpenRouter API key, CORS).",
     "Il supervisor e le analisi AI funzionano anche senza OPENROUTER_API_KEY (fallback a sole regole di sicurezza).",
+    "Deployment Docker: docker-compose.yaml unificato (MySQL 8.4 + backend + frontend + trading_api). "
+    "mt5_api escluso (Windows-only, gira nativo).",
+    "Deployment remoto: server Ubuntu (192.168.1.183) per backend/frontend/MySQL, Windows (192.168.1.180) per mt5_api. "
+    "Guida in LANCIO_REMOTO.md.",
 ])
 
-out = r"C:\Users\crist\MT5Pulse\REPORT_MT5PULSE.pdf"
+out = r"C:\Users\vallo\mt5-pulse\REPORT_MT5PULSE.pdf"
 pdf.output(out)
 print("OK ->", out)

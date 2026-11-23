@@ -38,7 +38,10 @@
       "Bash(git log *)",
       "Bash(echo *)",
       "Bash(git diff *)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(dir *)",
+      "Bash(find *)",
+      "Bash(pip install *)"
     ]
   },
   "$version": 4
