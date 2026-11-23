@@ -220,10 +220,17 @@ def close_slave_position(trader_id: int):
 
 def log(trader_id: int, msg: str):
     ts = datetime.now(ZoneInfo("Europe/Rome")).strftime("%H:%M:%S")
-    global_log(msg)
+    with sessions_lock:
+        session = sessions.get(trader_id)
+        trader_name = session["trader"].name if session and session.get("trader") else None
+    # /trade/logs?trader=<nome> filtra per nome: senza il nome l'ordine non appare nella UI
+    line = msg
+    if trader_name and trader_name not in msg:
+        line = f"{msg} | {trader_name}"
+    global_log(line)
     with sessions_lock:
         if trader_id in sessions:
-            sessions[trader_id].setdefault("logs", []).append(f"[{ts}] {msg}")
+            sessions[trader_id].setdefault("logs", []).append(f"[{ts}] {line}")
 
 
 # ─────────────────────── REGIME DI VOLATILITÀ ───────────────────────
