@@ -96,6 +96,17 @@ def log(message, file="server_log.txt"):
         del logs[:len(logs) - MAX_LOGS]
 
 
+def logs_since(start: int) -> str:
+    """Solo i log aggiunti dopo l'indice `start` (cioè durante una singola richiesta).
+
+    Usare nelle risposte API al posto di tutto lo storico:
+        log_start = len(logs)   # a inizio funzione
+        ...
+        return {..., "logs": logs_since(log_start)}
+    """
+    return "\n".join(logs[start:])
+
+
 import requests
 
 class FakeResponse:

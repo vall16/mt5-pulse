@@ -3,7 +3,7 @@ import json
 from logging import info
 
 from pydantic import BaseModel
-from logger import log, logs, safe_get,safe_post
+from logger import log, logs, logs_since, safe_get,safe_post
 from typing import List, Optional
 import uuid
 import mysql.connector
@@ -870,8 +870,7 @@ def copy_orders(trader_id: int):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    logs = []  # elenco dei messaggi di log
-
+    log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
     log("🚀 Entrato in copy_orders()")
 
@@ -883,7 +882,7 @@ def copy_orders(trader_id: int):
     if not trader:
         
         return {"status": "ko", "message": "Trader non trovato",
-                "logs": "\n".join(logs)
+                "logs": logs_since(log_start)
 
                 #  "logs": logs
                  }
@@ -1295,7 +1294,7 @@ def copy_orders(trader_id: int):
     return {
         "status": "ok",
         "message": "Operazione completata",
-        "logs": "\n".join(logs)
+        "logs": logs_since(log_start)
 
     }
 
@@ -1431,6 +1430,7 @@ def open_order_on_slave(payload: OrderPayload):
 
     with open_order_lock:  # 🔒 blocca l'accesso concorrente
 
+        log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
         order_type = payload.order_type
         volume = payload.volume
@@ -1451,7 +1451,7 @@ def open_order_on_slave(payload: OrderPayload):
         # 1️⃣ Recupero trader
         trader = get_trader(cursor, trader_id)
         if not trader:
-            return {"status": "ko", "message": "Trader non trovato", "logs": logs}
+            return {"status": "ko", "message": "Trader non trovato", "logs": logs_since(log_start)}
 
         # 2️⃣ Inizializza server SLAVE
         base_url_slave = f"http://{trader['slave_ip']}:{trader['slave_port']}"
@@ -1471,7 +1471,7 @@ def open_order_on_slave(payload: OrderPayload):
         if resp.status_code != 200:
             return {"status": "ko", "message": f"Errore login slave: {resp.text}",
                     #  "logs": logs
-                    "logs": "\n".join(logs)
+                    "logs": logs_since(log_start)
 
                     }
 
@@ -1489,7 +1489,7 @@ def open_order_on_slave(payload: OrderPayload):
             log(f"🔎 Verifica simbolo sullo SLAVE: {symbol}")
 
             return {"status": "ko", "message": f"Errore tick {resp_tick.text}",
-                    "logs": "\n".join(logs)
+                    "logs": logs_since(log_start)
                     #  "logs": logs
                     }
 
@@ -1497,7 +1497,7 @@ def open_order_on_slave(payload: OrderPayload):
         if "error" in tick or "bid" not in tick or "ask" not in tick:
             log(f"⚠️ Tick non valido per {symbol}: {tick}")
             return {"status": "ko", "message": f"Tick non valido: {tick}",
-                    "logs": "\n".join(logs)}
+                    "logs": logs_since(log_start)}
 
         log(f"📈 Tick ricevuto: BID={tick['bid']} ASK={tick['ask']}")
 
@@ -1527,7 +1527,7 @@ def open_order_on_slave(payload: OrderPayload):
         if resp_order.status_code != 200:
             return {"status": "ko", "message": f"Errore invio ordine: {resp_order.text}",
                     #  "logs": logs
-                    "logs": "\n".join(logs)
+                    "logs": logs_since(log_start)
 
                     }
 
@@ -1562,7 +1562,7 @@ def open_order_on_slave(payload: OrderPayload):
             "message": "Ordine inviato allo SLAVE",
             "ticket": ticket,
             # "logs": logs
-            "logs": "\n".join(logs)
+            "logs": logs_since(log_start)
 
         }
 
@@ -1577,6 +1577,8 @@ class CloseOrderPayload(BaseModel):
 def close_order_on_slave(payload: CloseOrderPayload):
     trader_id = payload.trader_id
     symbol = payload.symbol
+
+    log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
@@ -1613,7 +1615,7 @@ def close_order_on_slave(payload: CloseOrderPayload):
     resp = requests.post(login_url, json=login_body, timeout=30)
     if resp.status_code != 200:
         return {"status": "ko", "message": f"Errore login slave: {resp.text}", 
-                "logs": "\n".join(logs)
+                "logs": logs_since(log_start)
 
                 # "logs": logs
                 }
@@ -1635,7 +1637,7 @@ def close_order_on_slave(payload: CloseOrderPayload):
         if resp_order.status_code != 200:
             return {"status": "ko", "message": f"Errore chiusura ordine: {resp_order.text}", 
                     # "logs": logs
-                    "logs": "\n".join(logs)
+                    "logs": logs_since(log_start)
 
                     }
 
@@ -1663,7 +1665,7 @@ def close_order_on_slave(payload: CloseOrderPayload):
     except requests.RequestException as e:
         log(f"❌ Errore invio richiesta chiusura ordine: {e}")
         return {"status": "ko", "message": str(e), 
-                "logs": "\n".join(logs)
+                "logs": logs_since(log_start)
 
                 # "logs": logs
                 }

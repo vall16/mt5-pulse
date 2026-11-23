@@ -618,8 +618,8 @@
       <div class="log-box log-modal-box" #logBox>
         <div *ngIf="!logModalTrader?.logs?.length" class="log-empty">Nessun log</div>
         <div *ngFor="let line of logModalTrader?.logs"
-             [class.log-start]="line.includes('START')"
-             [class.log-stop]="line.includes('STOP')">{{ line }}</div>
+             [class.log-start]="line.includes('START') && !line.includes('Response:')"
+             [class.log-stop]="line.includes('STOP') && !line.includes('Response:')">{{ line }}</div>
       </div>
     </div>
   </div>
