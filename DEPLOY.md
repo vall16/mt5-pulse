@@ -1,98 +1,109 @@
 # Rilascio MT5Pulse sul server
 
-Obiettivo: **una sorgente di verità (`main` su GitHub), un comando di deploy, rollback sicuro**. Sul server remoto **non si usa Docker**: backend e frontend sono servizi systemd.
+Obiettivo: **un solo file da lanciare (`rilascia.bat`), procedura stabilita una volta per tutte, rollback sicuro**. Sul server remoto (`192.168.1.183`) **non si usa git né Docker**: i file vengono caricati via SFTP e backend/frontend sono servizi systemd.
+
+## Rilascio (procedura unica)
+
+Dal PC Windows, **doppio click su `rilascia.bat`** nella root del progetto (oppure da terminale):
+
+```bat
+rilascia.bat              :: build + upload + restart + healthcheck (+ rollback automatico se fallisce)
+rilascia.bat --rollback   :: ripristina l'ultimo backup
+rilascia.bat --setup      :: installazione una tantum sul server (già eseguito il 2026-11-23)
+rilascia.bat --skip-build :: rilascio senza ricostruire il frontend
+```
+
+`rilascia.bat` è solo l'ingresso: tutta la logica sta in `scripts/release.py`.
 
 ## File coinvolti
 
 | File | Ruolo |
 |---|---|
-| `scripts/deploy.sh` | deploy/rollback idempotente sul server Ubuntu |
-| `scripts/install_server.sh` | installazione una tantum delle unit systemd |
+| `rilascia.bat` | **punto di ingresso unico** del rilascio |
+| `scripts/release.py` | build locale + upload SFTP + restart systemd + healthcheck + rollback |
 | `deploy/systemd/*.service` | unit per backend e frontend |
 | `deploy/spa_server.py` | server statico della SPA, con fallback `index.html` |
 | `frontend/src/environments/environment.remote.ts` | URL del backend remoto, usato dalla build `production-remote` |
 | `scripts/start_mt5_api.bat` | riavvio agenti MT5 sulla macchina Windows |
 
-I file `.env` restano **fuori da git** (`.gitignore`) e non vengono mai sovrascritti dal deploy.
+Il `.env` del server è **specifico del server** e non viene mai sovrascritto dal rilascio (escluso dall'upload). Sul server deve contenere:
+
+```text
+API_HOST=0.0.0.0
+API_PORT=8080
+CORS_ORIGINS=http://localhost:4200,http://127.0.0.1:4200,http://192.168.1.183:4200
+```
+
+## Requisiti sul PC Windows
+
+- Node/npm per la build Angular.
+- Il venv del backend con `paramiko` (già presente in `backend\venv`).
+- Password SSH: letta da `MT5_DEPLOY_PASSWORD`, oppure da `LANCIO_REMOTO.md`, oppure chiesta interattivamente.
 
 ---
 
-## 1. Setup una tantum su `192.168.1.183`
+## 1. Setup una tantum (già eseguito il 2026-11-23)
 
-Se il clone non esiste ancora:
+```bat
+rilascia.bat --setup
+```
+
+`--setup` fa tutto:
+
+1. carica `backend/`, `deploy/` e la build del frontend sul server;
+2. crea il venv Python in `/home/vibe/venvs/mt5pulse` (fuori dalla cartella app, che è su filesystem senza permessi symlink) e installa `backend/requirements.txt`;
+3. installa e abilita le unit systemd `mt5pulse-backend` e `mt5pulse-frontend`;
+4. crea `/etc/sudoers.d/mt5pulse` (NOPASSWD solo per il restart dei due servizi);
+5. ferma eventuali processi manuali residui (`python3 main.py`, `spa_server.py`) e avvia i servizi;
+6. healthcheck su `:8080` e `:4200`.
+
+Verifica:
 
 ```bash
 ssh vibe@192.168.1.183
-git clone https://github.com/vall16/mt5-pulse.git /home/vibe/code/mt5-pulse
-cd /home/vibe/code/mt5-pulse/backend
-python3 -m venv venv
-```
-
-Installa le unit systemd e abilitale all'avvio:
-
-```bash
-cd /home/vibe/code/mt5-pulse
-./scripts/install_server.sh
-sudo systemctl start mt5pulse-backend mt5pulse-frontend
-```
-
-Consenti all'utente `vibe` di riavviare **solo** i due servizi:
-
-```bash
-sudo visudo -f /etc/sudoers.d/mt5pulse
-```
-
-```text
-vibe ALL=(root) NOPASSWD: /usr/bin/systemctl restart mt5pulse-backend, /usr/bin/systemctl restart mt5pulse-frontend
-```
-
-Verifica iniziale:
-
-```bash
 systemctl status mt5pulse-backend mt5pulse-frontend
 curl http://127.0.0.1:8080/
 curl http://127.0.0.1:4200/
 ```
 
-> Il vecchio `frontend/spa_server.py` eventualmente presente sul server non viene toccato: la nuova unit usa `deploy/spa_server.py`, che è versionato.
-
 ---
 
 ## 2. Rilascio normale
 
-Dal tuo PC Windows:
+Dal PC Windows, nella root del progetto:
 
 ```bat
-git push origin main
-ssh vibe@192.168.1.183 "cd /home/vibe/code/mt5-pulse && ./scripts/deploy.sh"
+rilascia.bat
 ```
 
-`deploy.sh` esegue, in ordine:
+`release.py` esegue, in ordine:
 
-1. rifiuta il deploy se il clone sul server ha modifiche tracciate;
-2. `git fetch` + `git pull --ff-only origin main`;
-3. salva lo SHA precedente in `~/.local/state/mt5pulse/previous_sha`;
-4. reinstalla i requirements solo se `backend/requirements.txt` è cambiato;
-5. esegue `npm ci` se sono cambiati i file lock, poi `npm run build -- --configuration production-remote`;
-6. riavvia i due servizi systemd;
-7. fa healthcheck su `:8080` e `:4200` per 30 secondi;
-8. se il healthcheck fallisce, **fa automaticamente rollback** allo SHA precedente.
+1. `npm run build -- --configuration production-remote` in locale (il bundle punta a `http://192.168.1.183:8080`);
+2. **backup** dello stato corrente sul server in `/home/vibe/backups/mt5-pulse-<timestamp>.tgz` (backend + dist + deploy, esclusi venv e log);
+3. upload via SFTP di `backend/` (esclusi venv, log, `mt5_api/`, `.env`), `deploy/` e `frontend/dist/demo/browser`;
+4. `pip install -r requirements.txt` nel venv del server (idempotente);
+5. restart dei due servizi systemd;
+6. healthcheck su `:8080` e `:4200` per 60 secondi;
+7. se il healthcheck fallisce, **restore automatico del backup** e restart.
 
-Il frontend remoto usa `environment.remote.ts` (`http://192.168.1.183:8080`): niente più `sed` sui file buildati. La build Docker locale continua a usare la configurazione `production` invariata.
+Opzioni:
+
+- `--skip-build`: riusa la build locale esistente (utile se hai già buildato);
+- `--host`, `--user`, `--app`: override di destinazione (default `192.168.1.183`, `vibe`, `/home/vibe/code/mt5-pulse`).
+
+La build Docker locale continua a usare la configurazione `production` invariata (`127.0.0.1:8080`).
 
 ---
 
 ## 3. Rollback manuale
 
-```bash
-ssh vibe@192.168.1.183 "cd /home/vibe/code/mt5-pulse && ./scripts/deploy.sh rollback"
+```bat
+rilascia.bat --rollback
 ```
 
-Oppure verso un commit specifico:
+Ripristina l'ultimo backup disponibile in `/home/vibe/backups/`, reinstalla i requirements e riavvia i servizi.
 
-```bash
-ssh vibe@192.168.1.183 "cd /home/vibe/code/mt5-pulse && ./scripts/deploy.sh rollback <SHA>"
-```
+> Nota: il restore sovrascrive i file presenti nel backup; eventuali file *nuovi* introdotti da un rilascio fallito non vengono rimossi automaticamente.
 
 ---
 
@@ -104,15 +115,15 @@ journalctl -u mt5pulse-frontend -f
 systemctl status mt5pulse-backend mt5pulse-frontend
 ```
 
+Il backend impiega ~15 secondi ad avviarsi sul Raspberry (import pandas/numpy + migrazioni DB): è normale.
+
 ---
 
 ## 5. Agenti MT5 su `192.168.1.180` (Windows)
 
-Le modifiche a `backend/mt5_api/` **non** si propagano da sole: sulla macchina Windows:
+Le modifiche a `backend/mt5_api/` **non** si propagano da sole: sulla macchina Windows aggiorna i file e lancia:
 
 ```bat
-cd C:\Users\vallo\mt5-pulse
-git pull origin main
 scripts\start_mt5_api.bat
 ```
 
@@ -122,10 +133,10 @@ Lo script ferma le istanze sulle porte 8000-8003 e le riavvia. Ricorda poi `/ini
 
 ## 6. Database
 
-All'avvio il backend esegue `run_migrations()` (aggiunta colonne mancanti). Se la modifica crea **nuove tabelle**, applica lo SQL manualmente su MySQL prima del deploy.
+All'avvio il backend esegue `run_migrations()` (aggiunta colonne mancanti). Se la modifica crea **nuove tabelle**, applica lo SQL manualmente su MySQL prima del rilascio.
 
 ---
 
-## 7. Perché non ho messo GitHub Actions
+## 7. Perché non GitHub Actions / git sul server
 
-`192.168.1.183` è un IP privato: i runner GitHub pubblici non possono raggiungerlo via SSH. Il comando di deploy resta identico; per automatizzarlo servirebbe un **self-hosted runner** dentro la LAN che esegua lo stesso `ssh ... ./scripts/deploy.sh`.
+`192.168.1.183` è un IP privato della LAN: i runner GitHub pubblici non lo raggiungono, e si è scelto di non tenere un clone git sul server. Il rilascio è quindi push-based dal PC Windows (`release.py`). Per automatizzarlo servirebbe un runner/self-hosted dentro la LAN che esegua lo stesso comando.
