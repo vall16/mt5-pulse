@@ -33,7 +33,12 @@
       "Bash(scriptblock *)",
       "Bash(move *)",
       "Bash(backend\\venv\\scripts\\python.exe *)",
-      "Bash(catch *)"
+      "Bash(catch *)",
+      "Bash(cd *)",
+      "Bash(git log *)",
+      "Bash(echo *)",
+      "Bash(git diff *)",
+      "Bash(git status *)"
     ]
   },
   "$version": 4

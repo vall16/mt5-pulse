@@ -11,7 +11,7 @@ MT5_API_URL = os.environ.get("MT5_API_URL", "http://127.0.0.1:8081")
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
-    api_key=os.environ.get("OPENROUTER_API_KEY"),
+    api_key=os.environ.get("OPENROUTER_API_KEY") or "sk-placeholder",
 )
 MODEL = "openrouter/free"
 
