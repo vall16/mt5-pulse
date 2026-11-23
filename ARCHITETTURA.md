@@ -87,7 +87,7 @@ In pratica è il "braccio" distribuito, mentre il backend è il "cervello" centr
 
 ## Note e incoerenze note
 
-- `environment.prod.ts` non è mai applicato (manca `fileReplacements` in `angular.json`), quindi anche in build production il FE punta a `127.0.0.1:8080`.
+- La build `production` non applica `fileReplacements` (voluto per il Docker locale); per il server esiste la configurazione `production-remote`, che usa `environment.remote.ts` (`http://192.168.1.183:8080`). Vedi `DEPLOY.md`.
 - `@supabase/supabase-js` è in `frontend/package.json` ma inutilizzato nel codice `src/`; le migration SQL in `frontend/supabase/` restano orfane. L'autenticazione passa da `POST /db/login` (MySQL).
 - La cartella `backend/routers/` contiene file vuoti (0 byte), inutilizzata.
 - Compose unificato a livello root (`docker-compose.yaml`): MySQL, backend, frontend. `backend/mt5_api` non è in Docker (Windows-only).

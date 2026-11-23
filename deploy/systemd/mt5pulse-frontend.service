@@ -1,0 +1,20 @@
+[Unit]
+Description=MT5Pulse Frontend (SPA statica)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vibe
+Group=vibe
+WorkingDirectory=/home/vibe/code/mt5-pulse
+EnvironmentFile=-/etc/default/mt5pulse
+Environment=MT5PULSE_WEB_ROOT=/home/vibe/code/mt5-pulse/frontend/dist/demo/browser
+ExecStart=/usr/bin/python3 /home/vibe/code/mt5-pulse/deploy/spa_server.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

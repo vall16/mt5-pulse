@@ -23,6 +23,20 @@
               "optimization": true,
               "outputHashing": "all",
               "sourceMap": false
+            },
+            "production-remote": {
+              "aot": true,
+              "extractLicenses": true,
+              "namedChunks": false,
+              "optimization": true,
+              "outputHashing": "all",
+              "sourceMap": false,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.remote.ts"
+                }
+              ]
             }
           },
           "options": {
