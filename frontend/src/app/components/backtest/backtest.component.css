@@ -21,6 +21,34 @@
   margin: 0;
 }
 
+.tutorial-box {
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #1e40af;
+}
+.tutorial-box summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  color: #1e40af;
+}
+.tutorial-content {
+  margin-top: 12px;
+  color: #334155;
+  line-height: 1.6;
+}
+.tutorial-content ul {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+.tutorial-content li {
+  margin-bottom: 4px;
+}
+
 .config-card {
   background: white;
   border-radius: 8px;

@@ -1357,14 +1357,13 @@ def get_history_db(trader_id, symbol=None, profit_min=None, profit_max=None):
     cursor = conn.cursor(dictionary=True)
 
     query = """
-        SELECT 
+        SELECT
             id, trader_id, master_order_id, master_ticket,
             ticket, symbol, type, volume,
             price_open, price_close, profit, comment,
             opened_at, closed_at
         FROM slave_orders
         WHERE trader_id = %s
-          AND closed_at IS NOT NULL
     """
     params = [trader_id]
 

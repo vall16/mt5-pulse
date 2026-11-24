@@ -4,6 +4,23 @@
     <p class="subtitle">Test strategies on historical data</p>
   </div>
 
+  <details class="tutorial-box">
+    <summary>📖 Come funziona il backtest</summary>
+    <div class="tutorial-content">
+      <p><strong>Il backtest simula una strategia su dati storici</strong> scaricati dal terminale MT5 collegato al trader scelto.</p>
+      <ul>
+        <li><strong>Trader</strong> — indica <em>da quale terminale MT5</em> scaricare le candele storiche (usa il server slave del trader). Non usa la strategia configurata sul trader.</li>
+        <li><strong>Strategy</strong> — la logica di segnale da simulare (SUPER, SUPER_DM, EMA_CROSS, ecc.). È questa a decidere buy/sell nel backtest.</li>
+        <li><strong>Symbol</strong> — la coppia/strumento su cui testare (es. XAUUSD).</li>
+        <li><strong>Days</strong> — quanti giorni di storico scaricare (max 365).</li>
+        <li><strong>Lot</strong> — dimensione del lotto per ogni trade simulato.</li>
+        <li><strong>Balance</strong> — capitale iniziale in $ per la simulazione.</li>
+        <li><strong>Direction</strong> — limita i trade a solo Buy, solo Sell, o entrambi.</li>
+      </ul>
+      <p>Al termine ottieni: numero di trade, win rate, profitto totale, drawdown massimo, equity curve e lista dei singoli trade.</p>
+    </div>
+  </details>
+
   <div class="config-card">
     <div class="config-grid">
       <div class="form-group">
