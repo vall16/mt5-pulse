@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/check-server")
-async def manager_check_server(payload: dict):
+def manager_check_server(payload: dict):
     agent_url = f"http://{payload['host']}:{payload['port']}/check-server"
     try:
         r = requests.post(agent_url, json={}, timeout=5)
@@ -31,7 +31,7 @@ class ServerStartRequest(BaseModel):
 
 
 @router.post("/start_server")
-async def start_server(req: ServerStartRequest):
+def start_server(req: ServerStartRequest):
     """
     Ordina all'agente remoto di avviare MT5 e lo inizializza.
     Le credenziali (pwd) sono lette dal DB per id: il client non le invia.

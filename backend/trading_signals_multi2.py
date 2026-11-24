@@ -192,7 +192,7 @@ def send_order(trader_id: int, direction: str):
     try:
         resp = requests.post(
             f"{BASE_URL}/db/traders/{trader_id}/open_order_on_slave",
-            json=payload, timeout=10
+            json=payload, timeout=75
         )
         log(trader_id, f"📥 Trader {trader_id} {direction.upper()} Response: {resp.text}")
     except Exception as e:
@@ -209,7 +209,7 @@ def close_slave_position(trader_id: int):
     try:
         resp = requests.post(
             f"{BASE_URL}/db/traders/{trader_id}/close_order_on_slave",
-            json=payload, timeout=10
+            json=payload, timeout=75
         )
         log(trader_id, f"📥 Trader {trader_id} CLOSE Response: {resp.text}")
     except Exception as e:
