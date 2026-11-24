@@ -42,7 +42,8 @@
       "Bash(dir *)",
       "Bash(find *)",
       "Bash(pip install *)",
-      "Bash(ren *)"
+      "Bash(ren *)",
+      "Bash(rilascia.bat)"
     ]
   },
   "$version": 4

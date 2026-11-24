@@ -103,8 +103,12 @@ def logs_since(start: int) -> str:
         log_start = len(logs)   # a inizio funzione
         ...
         return {..., "logs": logs_since(log_start)}
+
+    Nei log annidati nelle risposte la data/ora resta solo all'inizio della
+    riga esterna: ogni riga interna ripeterebbe lo stesso [gg/mm/aaaa hh:mm].
     """
-    return "\n".join(logs[start:])
+    timestamp_re = re.compile(r"^\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}\] ")
+    return "\n".join(timestamp_re.sub("", line) for line in logs[start:])
 
 
 import requests

@@ -658,6 +658,7 @@ def get_traders():
             "selected_symbol": row.get("selected_symbol"),
             "direction_filter": row.get("direction_filter") or "both",
             "sessions_filter": row.get("sessions_filter", "ASIA,LONDON,NY-LON,NY,OFF"),
+            "notes": row.get("notes"),
             "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
             "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
         })

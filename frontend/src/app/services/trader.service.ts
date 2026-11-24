@@ -100,7 +100,9 @@ export class TraderService {
         custom_signal_interval: trader.custom_signal_interval ?? 2,   //default 2
         selected_signal: trader.selected_signal,
         selected_symbol: trader.selected_symbol,
-        direction_filter: trader.direction_filter ?? 'both'
+        direction_filter: trader.direction_filter ?? 'both',
+        sessions_filter: trader.sessions_filter,
+        notes: trader.notes
 
       })))
     );
