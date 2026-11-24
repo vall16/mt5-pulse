@@ -211,11 +211,13 @@ export class UserDashboardComponent implements OnInit {
     });
   }
 
-  // 📜 porta lo scroll in fondo alla modale
+  // 📜 porta lo scroll in fondo solo se l'utente è già in fondo
   private scrollLogToBottom() {
     setTimeout(() => {
       const el = this.logBoxRef?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
+      if (!el) return;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+      if (atBottom) el.scrollTop = el.scrollHeight;
     }, 0);
   }
 
