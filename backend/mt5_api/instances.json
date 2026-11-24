@@ -1,0 +1,22 @@
+[
+  {
+    "name": "METAQUOTES_DEMO",
+    "port": 8000,
+    "path": "C:\\MT5_1\\terminal64.exe"
+  },
+  {
+    "name": "ICMARKETS_DEMO",
+    "port": 8001,
+    "path": "C:\\Program Files\\MetaTrader 5 - 2\\terminal64.exe"
+  },
+  {
+    "name": "ICMARKETS_DEMO_2",
+    "port": 8002,
+    "path": "C:\\Program Files\\MetaTrader 5 - 3\\terminal64.exe"
+  },
+  {
+    "name": "ICMARKETS_REAL",
+    "port": 8003,
+    "path": "C:\\MT5_2\\terminal64.exe"
+  }
+]

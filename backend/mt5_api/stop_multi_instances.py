@@ -1,35 +1,34 @@
-import subprocess
 import re
+import subprocess
 
 PORTS = [8000, 8001, 8002, 8003]
 
 
-def find_pid(port):
-    """
-    Trova il PID che sta ascoltando sulla porta.
-    Usa netstat (Windows).
-    """
+def find_pids(port):
+    """Trova i PID che stanno ASCOLTANDO sulla porta (solo righe LISTENING)."""
+    pids = []
     try:
         result = subprocess.check_output(
             f"netstat -ano | findstr :{port}",
-            shell=True, text=True
+            shell=True,
+            text=True,
         ).strip().splitlines()
+    except Exception:
+        return pids
 
-        for line in result:
-            parts = re.split(r"\s+", line)
-            if len(parts) >= 5:
-                pid = parts[-1]
-                return pid
-    except:
-        return None
+    for line in result:
+        if "LISTENING" not in line.upper():
+            continue
+        parts = re.split(r"\s+", line.strip())
+        if len(parts) >= 5 and parts[-1].isdigit():
+            pid = parts[-1]
+            if pid not in pids:
+                pids.append(pid)
 
-    return None
+    return pids
 
 
 def kill_pid(pid):
-    """
-    Termina un processo con taskkill.
-    """
     try:
         print(f"🛑 Kill PID {pid}")
         subprocess.call(f"taskkill /F /PID {pid}", shell=True)
@@ -40,16 +39,21 @@ def kill_pid(pid):
 def main():
     print("🔍 Sto cercando server Uvicorn su:", PORTS)
 
+    killed = set()
     for port in PORTS:
-        pid = find_pid(port)
-
-        if pid:
-            print(f"➡️ Porta {port} è occupata da PID {pid} → TERMINO...")
+        pids = find_pids(port)
+        if not pids:
+            print(f"✔️ Porta {port} libera (nessun listener)")
+            continue
+        for pid in pids:
+            if pid in killed:
+                print(f"↪️ Porta {port}: PID {pid} gia' terminato")
+                continue
+            print(f"➡️ Porta {port} occupata da PID {pid} → TERMINO...")
             kill_pid(pid)
-        else:
-            print(f"✔️ Porta {port} è libera (nessun server)")
+            killed.add(pid)
 
-    print("\n✅ Tutte le istanze sono state terminate.")
+    print(f"\n✅ Terminati {len(killed)} processi.")
 
 
 if __name__ == "__main__":
