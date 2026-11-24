@@ -149,6 +149,7 @@ class DealsAllResponse(BaseModel):
 
 # Modello per aggiornamento trader
 class TraderServersUpdate(BaseModel):
+    name: str | None = None
     master_server_id: Optional[int] = None
     slave_server_id: Optional[int] = None
     sl:Optional[int] = None

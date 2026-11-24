@@ -760,6 +760,9 @@ def update_trader_servers(trader_id: int, update: TraderServersUpdate):
     fields = []
     values = []
 
+    if update.name is not None and update.name.strip():
+        fields.append("name = %s")
+        values.append(update.name.strip())
     if update.master_server_id is not None:
         fields.append("master_server_id = %s")
         values.append(update.master_server_id)

@@ -618,7 +618,8 @@ saveTrader(trader: Trader) {
     trader.custom_signal_interval ?? null,
     trader.selected_symbol ?? null,
     trader.sessions_filter ?? null,
-    trader.notes ?? null
+    trader.notes ?? null,
+    trader.name ?? null
   ).subscribe({
     next: (res) => {
       console.log('✅ [UPDATE OK] Trader aggiornato dal backend:', res);

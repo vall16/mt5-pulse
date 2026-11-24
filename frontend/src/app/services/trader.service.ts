@@ -146,10 +146,12 @@ export class TraderService {
     selected_symbol?: string | null,
     sessions_filter?: string | null,
     notes?: string | null,
+    name?: string | null,
     // copyInterval?: number | null
 
   ) {
     return this.http.put<Trader>(`${this.apiUrl}/db/traders/${id}/servers`, {
+      name: name,
       master_server_id: masterId,
       slave_server_id: slaveId,
       sl: sl,

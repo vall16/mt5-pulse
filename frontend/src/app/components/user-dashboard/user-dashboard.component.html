@@ -199,7 +199,7 @@
           <div class="card-header">
             <div class="drag-handle" cdkDragHandle>⠿</div>
             <div class="trader-info">
-              <h4>{{ trader.name }}</h4>
+              <input type="text" class="trader-name-input" [(ngModel)]="trader.name" placeholder="Nome trader" />
               <div class="status-row">
                 <span class="trader-status" [class.active]="trader.status === 'active'" [class.inactive]="trader.status === 'inactive'">
                   {{ trader.status }}
