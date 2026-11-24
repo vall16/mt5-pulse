@@ -17,6 +17,7 @@
         <li><strong>Balance</strong> — capitale iniziale in $ per la simulazione.</li>
         <li><strong>Direction</strong> — limita i trade a solo Buy, solo Sell, o entrambi.</li>
       </ul>
+      <p><strong>SL/TP</strong> — il backtest usa la stessa logica dinamica di live: a ogni entry calcola SL/TP in base al regime di mercato (NORMAL: 1.5×/2.2× ATR, TREND: 2.0×/3.0× ATR) con clamps min/max. Non usa gli SL/TP fissi della card trader. Fallback: SL 500 / TP 600 punti.</p>
       <p>Al termine ottieni: numero di trade, win rate, profitto totale, drawdown massimo, equity curve e lista dei singoli trade.</p>
     </div>
   </details>

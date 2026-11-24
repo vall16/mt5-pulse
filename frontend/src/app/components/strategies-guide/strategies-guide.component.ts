@@ -47,6 +47,26 @@ export class StrategiesGuideComponent {
       ]
     },
     {
+      name: 'SUPER_DM',
+      title: 'SUPER DM — Decision Model',
+      description: 'SUPER + modello di scoring multi-fattore (momentum, trend, volatilità, RSI). Ogni segnale SUPER viene valutato con un punteggio 0-1; il trade parte solo se score ≥ 0.65. Filtra i segnali deboli che passano la logica booleana base.',
+      symbols: ['XAUUSD', 'EURUSD', 'GBPUSD'],
+      timeframe: 'M1 + M5 + M15',
+      polling: '30-60 sec',
+      slRange: '500-2000 (dinamico ATR)',
+      tpRange: '600-3000 (dinamico ATR)',
+      bestSession: 'London + New York (08:00-16:00 UTC)',
+      riskLevel: 'Medio',
+      frequency: '1-3 trade/giorno (più selettivo di SUPER)',
+      tags: ['Trend', 'Multi-TF', 'Decision Model', 'Scoring', 'Selettivo'],
+      tips: [
+        'Più selettivo di SUPER: molti segnali SUPER vengono scartati per score < 0.65',
+        'Win rate atteso superiore a SUPER, ma meno trade totali',
+        'I 4 fattori (momentum, trend, volatilità, RSI) sono pesati in modo uguale',
+        'Ideale per confrontare con SUPER in backtest e vedere il trade-off trade-count vs win-rate'
+      ]
+    },
+    {
       name: 'SUPER_PRO',
       title: 'SUPER PRO — Versione Strutturata',
       description: 'Stessa logica di SUPER con filtri M5/M15 più restrittivi. Meno trade ma di qualità superiore. Ideale per chi preferisce few-and-far-over.',
