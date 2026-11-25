@@ -177,7 +177,7 @@ def send_order(trader_id: int, direction: str):
         sl_value = price + (float(sl_points) * pip_value) if sl_points and sl_points > 0 else None
         tp_value = price - (float(tp_points) * pip_value) if tp_points and tp_points > 0 else None
 
-    log(trader_id, f"📐 Trader {trader_id} {direction.upper()}: SL={sl_points}pts ({sl_value}), TP={tp_points}pts ({tp_value})")
+    log(trader_id, f"📐 {trader.name} {direction.upper()}: SL={sl_points}pts ({sl_value}), TP={tp_points}pts ({tp_value})")
 
     payload = {
         "trader_id": trader_id,
@@ -194,7 +194,7 @@ def send_order(trader_id: int, direction: str):
             f"{BASE_URL}/db/traders/{trader_id}/open_order_on_slave",
             json=payload, timeout=75
         )
-        log(trader_id, f"📥 Trader {trader_id} {direction.upper()} Response: {resp.text}")
+        log(trader_id, f"📥 {trader.name} {direction.upper()} Response: {resp.text}")
     except Exception as e:
         log(trader_id, f"Errore invio ordine: {e}")
 
@@ -211,7 +211,7 @@ def close_slave_position(trader_id: int):
             f"{BASE_URL}/db/traders/{trader_id}/close_order_on_slave",
             json=payload, timeout=75
         )
-        log(trader_id, f"📥 Trader {trader_id} CLOSE Response: {resp.text}")
+        log(trader_id, f"📥 {trader.name} CLOSE Response: {resp.text}")
     except Exception as e:
         log(trader_id, f"Errore chiusura: {e}")
 

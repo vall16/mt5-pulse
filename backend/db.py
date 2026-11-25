@@ -68,7 +68,7 @@ def ensure_mt5_initialized(base_url: str, mt5_path: str, log=print):
     if resp is not None and resp.status_code == 200:
         data = resp.json()
         if data.get("status") == "ok":
-            log(f"✅ MT5 attivo (versione {data.get('mt5_version')})")
+            log("✅ MT5 attivo")
             return True
     else:
         log(f"⚠️ MT5 non attivo o errore nella risposta")
