@@ -610,8 +610,43 @@ def send_order(order: dict):
 
 
     if result.retcode != mt5.TRADE_RETCODE_DONE:
-        log(f"❌ Errore invio ordine: {result}")
-        raise HTTPException(status_code=400, detail=f"Trade failed: {result.comment}")
+        acc = mt5.account_info()
+
+        try:
+            required = mt5.order_calc_margin(
+                order["type"],
+                order.get("symbol", ""),
+                order["volume"],
+                order["price"],
+            )
+        except Exception as exc:
+            log(f"⚠️ order_calc_margin() failed: {exc}")
+            required = None
+
+        currency = f" {acc.currency}" if acc and acc.currency else ""
+        balance = f"{acc.balance:.2f}" if acc else "?"
+        equity = f"{acc.equity:.2f}" if acc else "?"
+        margin_free = f"{acc.margin_free:.2f}" if acc else "?"
+        required_str = f"{required:.2f}" if required is not None else "?"
+        missing = (
+            f"{max(0.0, required - acc.margin_free):.2f}"
+            if acc is not None and required is not None
+            else "?"
+        )
+        snap = (
+            f"balance={balance}{currency} "
+            f"equity={equity} "
+            f"margin_free={margin_free} "
+            f"required={required_str} "
+            f"missing={missing} "
+            f"volume={order['volume']} price={order['price']}"
+        )
+
+        log(f"❌ Ordine rifiutato: {result.comment} | {snap}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Trade failed: {result.comment} | {snap}",
+        )
 
     log(f"✅ Ordine eseguito correttamente: {result}")
     return {"message": "✅ Order sent", "result": result._asdict()}
