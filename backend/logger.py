@@ -31,6 +31,8 @@ _thread_ctx = threading.local()
 YELLOW = "\033[93m"
 RED = "\033[91m"
 GREEN = "\033[92m"
+CYAN = "\033[96m"
+BOLD = "\033[1m"
 RESET = "\033[0m"
 
 def colorize_signal(text: str) -> str:
@@ -51,6 +53,10 @@ def colorize_signal(text: str) -> str:
             lambda m: f"{RED}⏹ STOP{RESET}{RED}{m.group(1)}{RESET}",
             text,
         )
+    # 💙 HOLD: intera riga in ciano, parola "HOLD" in grassetto
+    if re.search(r'⏸\s*HOLD\b', text):
+        colored = text.replace("HOLD", f"{BOLD}HOLD{RESET}{CYAN}", 1)
+        return f"{CYAN}{colored}{RESET}"
     # 💛 BUY/SELL signal per <SIMBOLO> → giallo, simbolo rosso
     return re.sub(
         r'(BUY|SELL)\s+signal\s+per\s+(\S+)',
