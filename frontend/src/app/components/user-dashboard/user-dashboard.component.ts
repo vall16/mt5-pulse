@@ -304,6 +304,7 @@ export class UserDashboardComponent implements OnInit {
         console.warn('Nessun trader trovato.');
       }
 
+      this.restoreListeningState();
       this.checkAllServersConnection();
     },
     error: (err) => {
@@ -313,6 +314,18 @@ export class UserDashboardComponent implements OnInit {
     }
   });
 }
+  // 🔄 Ripristina lo stato listening reale dal backend (sopravvive alla navigazione)
+  restoreListeningState() {
+    this.traderService.getPollingStatus().subscribe({
+      next: (res) => {
+        const active = new Set(res.listening || []);
+        this.traders.forEach(t => { t.listening = active.has(t.id); });
+        this.cdr.detectChanges();
+      },
+      error: () => {}
+    });
+  }
+
   async loadTraders() {
     this.loading = true;
     this.error = '';

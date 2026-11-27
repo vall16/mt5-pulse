@@ -202,6 +202,11 @@ export class TraderService {
     return this.http.post(`${this.apiUrl}/trade/stop_polling`, { trader_id: trader.id });
   }
 
+  /** Id dei trader con polling attivo nel backend */
+  getPollingStatus(): Observable<{ listening: number[] }> {
+    return this.http.get<{ listening: number[] }>(`${this.apiUrl}/trade/polling_status`);
+  }
+
   /** Recupera i log di polling (opz. filtrati per nome trader) */
   getLogs(traderName: string, limit: number = 200): Observable<{ logs: string[] }> {
     return this.http.get<{ logs: string[] }>(

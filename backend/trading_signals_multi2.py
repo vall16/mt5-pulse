@@ -2137,6 +2137,13 @@ def start_polling(trader: Trader):
     return {"status": "started", "trader_id": tid}
 
 
+@router.get("/polling_status")
+def polling_status():
+    """Restituisce gli id dei trader con polling attivo."""
+    with sessions_lock:
+        return {"listening": list(sessions.keys())}
+
+
 @router.post("/stop_polling")
 def stop_polling(req: StopPollingRequest):
     trader_id = req.trader_id
