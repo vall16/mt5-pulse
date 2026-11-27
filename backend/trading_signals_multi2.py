@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import os
+import re
 import threading
 import time
 
@@ -300,6 +301,10 @@ class SignalStrategy:
         d = f" {details}" if details else ""
         return f"S-I-G-N-A-L [{self.name}] | {d}".strip()
 
+    def get_hold_details(self, ind: Indicators) -> str:
+        # Righe HOLD: niente SL/TP (hanno senso solo quando si apre un trade)
+        return re.sub(r"\s*SL:\d+ TP:\d+", "", self.get_log_details(ind))
+
     def run(self, trader_id: int):
         with sessions_lock:
             if trader_id not in sessions:
@@ -460,12 +465,13 @@ class SignalStrategy:
         # ── decisione ──
         new_signal = "HOLD"
         log_details = self.get_log_details(ind)
-        header = self.get_log_header(ind)
-        log(trader_id, f"{header} | {trader.name} | {symbol}")
+        first_cycle = session.pop("first_cycle", False)
 
         if self.buy_condition(ind) and direction_filter in ("buy", "both"):
             new_signal = "BUY"
-            log(trader_id, f"🔥 BUY signal per {symbol} {log_details}")
+            if prev_signal != "BUY":
+                log(trader_id, f"{self.get_log_header(ind)} | {trader.name} | {symbol}")
+                log(trader_id, f"🔥 BUY signal per {symbol} {log_details}")
 
             if not has_buy:
                 if self.reverse_on_buy(has_sell):
@@ -474,7 +480,9 @@ class SignalStrategy:
 
         elif self.sell_condition(ind) and direction_filter in ("sell", "both"):
             new_signal = "SELL"
-            log(trader_id, f"🔻 SELL signal per {symbol} {log_details}")
+            if prev_signal != "SELL":
+                log(trader_id, f"{self.get_log_header(ind)} | {trader.name} | {symbol}")
+                log(trader_id, f"🔻 SELL signal per {symbol} {log_details}")
 
             if not has_sell:
                 if self.reverse_on_sell(has_buy):
@@ -487,8 +495,18 @@ class SignalStrategy:
                 close_slave_position(trader_id)
             elif action == "close_sell":
                 close_slave_position(trader_id)
+            # HOLD: 1 riga solo al cambio di stato (BUY/SELL → HOLD) o di regime
             if not getattr(self, "quiet_holds", False):
-                log(trader_id, f"🔥 HOLD signal per {symbol} {log_details}")
+                regime = getattr(ind, "regime", None)
+                regime_changed = (
+                    regime is not None
+                    and session.get("last_hold_reg") is not None
+                    and regime != session.get("last_hold_reg")
+                )
+                if first_cycle or prev_signal != "HOLD" or regime_changed:
+                    log(trader_id, f"⏸ HOLD per {symbol} {self.get_hold_details(ind)} | {trader.name}")
+                if regime is not None:
+                    session["last_hold_reg"] = regime
 
         with sessions_lock:
             if trader_id in sessions:
@@ -2127,6 +2145,7 @@ def start_polling(trader: Trader):
                 "prev_signal": "HOLD",
                 "timer": None,
                 "logs": [],
+                "first_cycle": True,
             }
     finally:
         cursor.close()
