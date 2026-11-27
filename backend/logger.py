@@ -8,6 +8,7 @@ import time
 import sys
 import io
 import re
+import threading
 
 # Windows: se stdout è cp1252 (console/pipe) le emoji fanno crashare print()
 for _s in (sys.stdout, sys.stderr):
@@ -20,6 +21,11 @@ for _s in (sys.stdout, sys.stderr):
 start_time = datetime.now()
 logs = []  # lista globale dei log
 MAX_LOGS = 2000  # tetto alla lista in memoria (il file resta completo)
+
+# Ogni richiesta API che restituisce "logs" ha un buffer dedicato al proprio thread.
+# Senza questo, logs_since() restituisce anche le righe scritte da altri trader
+# (timer di polling concorrenti) durante la stessa richiesta.
+_thread_ctx = threading.local()
 
 # ── ANSI colori ──
 YELLOW = "\033[93m"
@@ -82,8 +88,12 @@ def log(message, file="server_log.txt"):
 
     for line in message.splitlines():
         line_to_print = f"{timestamp} {line}"
-        # 1. Salva in memoriaa
+        # 1. Salva in memoria (storico globale)
         logs.append(line_to_print)
+        # 1b. Salva nel buffer della richiesta corrente, se attivo
+        request_logs = getattr(_thread_ctx, "request_logs", None)
+        if request_logs is not None:
+            request_logs.append(line_to_print)
         # 2. Stampa a video con colori ANSI
         colored = colorize_signal(line_to_print)
         print(colored, flush=True)
@@ -96,19 +106,29 @@ def log(message, file="server_log.txt"):
         del logs[:len(logs) - MAX_LOGS]
 
 
-def logs_since(start: int) -> str:
-    """Solo i log aggiunti dopo l'indice `start` (cioè durante una singola richiesta).
+def start_request_log() -> int:
+    """Inizia una cattura di log isolata per il thread corrente.
 
-    Usare nelle risposte API al posto di tutto lo storico:
-        log_start = len(logs)   # a inizio funzione
-        ...
-        return {..., "logs": logs_since(log_start)}
+    Da chiamare all'inizio di ogni endpoint che restituisce `logs` nella risposta.
+    """
+    _thread_ctx.request_logs = []
+    return 0
+
+
+def logs_since(start: int) -> str:
+    """Restituisce solo i log generati dalla richiesta corrente.
+
+    Se la richiesta ha chiamato start_request_log(), usa il buffer del thread
+    corrente (isolato dagli altri trader). Altrimenti ricade sul vecchio
+    comportamento sullo storico globale, per compatibilità.
 
     Nei log annidati nelle risposte la data/ora resta solo all'inizio della
     riga esterna: ogni riga interna ripeterebbe lo stesso [gg/mm/aaaa hh:mm].
     """
     timestamp_re = re.compile(r"^\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}\] ")
-    return "\n".join(timestamp_re.sub("", line) for line in logs[start:])
+    request_logs = getattr(_thread_ctx, "request_logs", None)
+    source = request_logs if request_logs is not None else logs
+    return "\n".join(timestamp_re.sub("", line) for line in source[start:])
 
 
 import requests

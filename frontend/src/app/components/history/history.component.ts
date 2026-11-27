@@ -18,6 +18,8 @@ export class HistoryComponent implements OnInit {
   filteredDeals: SlaveOrder[] = [];
   loading = false;
   symbolFilter: string = '';
+  sortField: 'opened_at' | 'closed_at' = 'opened_at';
+  sortAsc = false;
 
   constructor(private traderService: TraderService) {}
 
@@ -80,6 +82,24 @@ export class HistoryComponent implements OnInit {
   clearFilter() {
     this.symbolFilter = '';
     this.loadDealsHistory();
+  }
+
+  toggleSort(field: 'opened_at' | 'closed_at') {
+    if (this.sortField === field) {
+      this.sortAsc = !this.sortAsc;
+    } else {
+      this.sortField = field;
+      this.sortAsc = false;
+    }
+  }
+
+  get sortedDeals(): SlaveOrder[] {
+    const dir = this.sortAsc ? 1 : -1;
+    const time = (d: SlaveOrder) => {
+      const v = d[this.sortField];
+      return v ? new Date(v.replace(' ', 'T')).getTime() : 0;
+    };
+    return [...this.filteredDeals].sort((a, b) => (time(a) - time(b)) * dir);
   }
 
   getDealType(type: number): string {

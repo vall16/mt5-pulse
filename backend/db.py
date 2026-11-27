@@ -3,7 +3,7 @@ import json
 from logging import info
 
 from pydantic import BaseModel
-from logger import log, logs, logs_since, safe_get,safe_post
+from logger import log, logs, logs_since, start_request_log, safe_get,safe_post
 from typing import List, Optional
 import uuid
 import mysql.connector
@@ -874,7 +874,7 @@ def copy_orders(trader_id: int):
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
 
-    log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
+    log_start = start_request_log()  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
     log("🚀 Entrato in copy_orders()")
 
@@ -1433,7 +1433,7 @@ def open_order_on_slave(payload: OrderPayload):
 
     with open_order_lock:  # 🔒 blocca l'accesso concorrente
 
-        log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
+        log_start = start_request_log()  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
         order_type = payload.order_type
         volume = payload.volume
@@ -1581,7 +1581,7 @@ def close_order_on_slave(payload: CloseOrderPayload):
     trader_id = payload.trader_id
     symbol = payload.symbol
 
-    log_start = len(logs)  # nella risposta solo i log di questa richiesta, non tutto lo storico
+    log_start = start_request_log()  # nella risposta solo i log di questa richiesta, non tutto lo storico
 
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)

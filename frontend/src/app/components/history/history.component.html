@@ -47,8 +47,12 @@
       <thead>
         <tr>
           <th>Ticket</th>
-          <th>Opened</th>
-          <th>Closed</th>
+          <th class="sortable" [class.active]="sortField === 'opened_at'" (click)="toggleSort('opened_at')">
+            Opened <span class="sort-arrow">{{ sortField === 'opened_at' ? (sortAsc ? '▲' : '▼') : '↕' }}</span>
+          </th>
+          <th class="sortable" [class.active]="sortField === 'closed_at'" (click)="toggleSort('closed_at')">
+            Closed <span class="sort-arrow">{{ sortField === 'closed_at' ? (sortAsc ? '▲' : '▼') : '↕' }}</span>
+          </th>
           <th>Type</th>
           <th>Symbol</th>
           <th>Volume</th>
@@ -59,7 +63,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let deal of filteredDeals">
+        <tr *ngFor="let deal of sortedDeals">
           <td>{{ deal.ticket }}</td>
           <td class="date-cell">{{ formatDate(deal.opened_at) }}</td>
           <td class="date-cell">{{ formatDate(deal.closed_at) }}</td>
