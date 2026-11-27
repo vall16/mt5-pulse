@@ -77,6 +77,9 @@ export interface Trader {
 
   // 🆕 Note libere sul trader
   notes?: string;
+
+  // 🆕 SUPER_ADAPTIVE: parametri JSON per-trader
+  strategy_params?: Record<string, any> | string | null;
 }
 
 export interface NewTrader {

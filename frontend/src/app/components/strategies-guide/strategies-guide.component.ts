@@ -47,6 +47,26 @@ export class StrategiesGuideComponent {
       ]
     },
     {
+      name: 'SUPER_ADAPTIVE',
+      title: 'SUPER ADAPTIVE — Parametri dinamici',
+      description: 'Nuovo segnale derivato da SUPER (SUPER non viene modificato). Parametri JSON per-trader, matrice sessione × regime, score continuo che modula gate/size/SL-TP, isteresi, scadenza del segnale, volatility targeting e sizing con rischio. Indicatori condivisi tra live e backtest.',
+      symbols: ['XAUUSD'],
+      timeframe: 'M1 + M5 + M15',
+      polling: '30-60 sec',
+      slRange: '500-2000 (dinamico ATR + volatilità)',
+      tpRange: '600-3000 (dinamico ATR + volatilità)',
+      bestSession: 'Londra / New York (RANGE e NEWS bloccati)',
+      riskLevel: 'Medio',
+      frequency: '1-4 trade/giorno',
+      tags: ['Adaptive', 'Multi-TF', 'Score', 'Hysteresis', 'Risk Sizing'],
+      tips: [
+        'I parametri si salvano nel trader come JSON: chiavi sconosciute e valori fuori intervallo vengono scartati',
+        'L’AdaptiveAgent viene avviato automaticamente e modula SL/TP entro guardrail',
+        'In RANGE la soglia sale e il lotto si dimezza; in NEWS non si entra',
+        'Il supervisore può proporre nuovi parametri con azione APPLY_PARAMS'
+      ]
+    },
+    {
       name: 'SUPER_DM',
       title: 'SUPER DM — Decision Model',
       description: 'SUPER + modello di scoring multi-fattore (momentum, trend, volatilità, RSI). Ogni segnale SUPER viene valutato con un punteggio 0-1; il trade parte solo se score ≥ 0.65. Filtra i segnali deboli che passano la logica booleana base.',

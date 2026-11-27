@@ -100,6 +100,9 @@ class Trader(BaseModel):
     # 🆕 Note libere sul trader
     notes: Optional[str] = None
 
+    # 🆕 SUPER_ADAPTIVE: parametri JSON per-trader (dict o stringa JSON)
+    strategy_params: Optional[dict] = None
+
 
 class Newtrader(BaseModel):
     
@@ -114,6 +117,7 @@ class Newtrader(BaseModel):
     fix_lot: Optional[float] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    strategy_params: Optional[dict] = None
 
 
 class GetLastCandleRequest(BaseModel):
@@ -171,5 +175,8 @@ class TraderServersUpdate(BaseModel):
 
     # 🆕 note libere
     notes: str | None = None
+
+    # 🆕 SUPER_ADAPTIVE: parametri JSON per-trader
+    strategy_params: dict | None = None
 
 

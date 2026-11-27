@@ -21,6 +21,12 @@ import pandas as pd
 import requests
 import adaptive_routes
 from news_filter import news_filter
+from super_adaptive_core import (
+    AdaptiveParams, compute_adaptive_indicators, compute_score,
+    effective_params, dynamic_sl_tp, size_multiplier, risk_based_lot,
+    score_history_update, hysteresis_ok, trigger_register, trigger_fresh,
+    entry_regime_ok,
+)
 
 # ─────────────────────── GLOBAL STATE ───────────────────────
 
@@ -52,6 +58,19 @@ def get_data(symbol, timeframe, n_candles, agent_url):
             return None
         df['time'] = pd.to_datetime(df['time'], unit='s')
         return df
+    except Exception:
+        return None
+
+
+def fetch_account_equity(slave_url: str):
+    """Equity dell'account slave, usata solo dal sizing di SUPER_ADAPTIVE."""
+    try:
+        resp = requests.get(f"{slave_url}/server_status", timeout=3)
+        if resp.status_code != 200:
+            return None
+        account = (resp.json() or {}).get("account") or {}
+        equity = account.get("equity")
+        return float(equity) if equity is not None else None
     except Exception:
         return None
 
@@ -127,7 +146,8 @@ def fetch_closed_deals_profit(slave_url: str, symbol: str, days: int = 30) -> di
 
 # ─────────────────────── SEND ORDER (unified) ───────────────────────
 
-def send_order(trader_id: int, direction: str):
+def send_order(trader_id: int, direction: str, volume=None, volume_multiplier=None):
+    """Invia l'ordine. I due parametri volume sono usati solo da SUPER_ADAPTIVE."""
     with sessions_lock:
         if trader_id not in sessions:
             return
@@ -178,12 +198,26 @@ def send_order(trader_id: int, direction: str):
         sl_value = price + (float(sl_points) * pip_value) if sl_points and sl_points > 0 else None
         tp_value = price - (float(tp_points) * pip_value) if tp_points and tp_points > 0 else None
 
-    log(trader_id, f"📐 {trader.name} {direction.upper()}: SL={sl_points}pts ({sl_value}), TP={tp_points}pts ({tp_value})")
+    # Volume: per tutti i segnali esistenti resta esattamente trader.fix_lot.
+    # Solo SUPER_ADAPTIVE passa volume e/o volume_multiplier.
+    adaptive_volume = volume is not None or volume_multiplier is not None
+    if adaptive_volume:
+        volume_value = trader.fix_lot if volume is None else volume
+        if volume_multiplier is not None and volume_value is not None:
+            volume_value = round(float(volume_value) * float(volume_multiplier), 2)
+        if volume_value is not None:
+            volume_value = max(0.01, min(float(volume_value), 100.0))
+        vol_log = f", VOL={volume_value}"
+    else:
+        volume_value = trader.fix_lot
+        vol_log = ""
+
+    log(trader_id, f"📐 {trader.name} {direction.upper()}: SL={sl_points}pts ({sl_value}), TP={tp_points}pts ({tp_value}){vol_log}")
 
     payload = {
         "trader_id": trader_id,
         "order_type": direction,
-        "volume": trader.fix_lot,
+        "volume": volume_value,
         "symbol": symbol,
         "sl": sl_value,
         "tp": tp_value,
@@ -381,12 +415,34 @@ class SignalStrategy:
         # ── indicatori ──
         ind = self.compute_indicators(df_m1, df_m5, df_m15, df_h1=df_h1)
 
+        # ── SUPER_ADAPTIVE: contesto per-trader (sessione/regime/agente/sizing) ──
+        if getattr(self, "backtest_custom_indicators", False):
+            agent = adaptive_routes.get_agent(trader_id)
+            with sessions_lock:
+                state = session.setdefault("strategy_state", {})
+                equity_cache = session.get("_adaptive_equity_cache")
+            equity = None
+            if getattr(self, "needs_account_equity", False):
+                now_ts = time.time()
+                if equity_cache and now_ts - equity_cache.get("ts", 0) < 300:
+                    equity = equity_cache.get("value")
+                else:
+                    equity = fetch_account_equity(slave_url)
+                    with sessions_lock:
+                        session["_adaptive_equity_cache"] = {"ts": now_ts, "value": equity}
+            self.prepare_signal_context(
+                ind, get_current_session(), state,
+                agent.get_params() if agent else None, equity,
+            )
+
         # ── SL/TP dinamico ──
         effective_sl, effective_tp = self.get_dynamic_sl_tp(ind)
 
         # ── adaptive override: se agent attivo, usa i suoi parametri ──
+        # SUPER_ADAPTIVE gestisce l'agente dentro prepare_signal_context:
+        # il flag evita la doppia applicazione.
         agent = adaptive_routes.get_agent(trader_id)
-        if agent and ind.atr_m5_val > 0:
+        if agent and ind.atr_m5_val > 0 and not getattr(ind, "adaptive_override_managed", False):
             p = agent.get_params()
             adaptive_sl = int(ind.atr_m5_val * p["sl_atr_factor"] * 100)
             adaptive_tp = int(ind.atr_m5_val * p["tp_atr_factor"] * 100)
@@ -420,7 +476,24 @@ class SignalStrategy:
                 for c in closed:
                     # profit reale letto dall'history MT5 (entry=out), 0 se non trovato
                     real_pnl = profit_map.get(c.get("ticket"), 0.0)
-                    agent.on_trade_closed(real_pnl, ind.atr_m5_val if hasattr(ind, 'atr_m5_val') else 0, "", c.get("ticket"))
+                    # Telemetria score/config solo per SUPER_ADAPTIVE: gli altri
+                    # segnali mantengono la chiamata storica a 4 argomenti.
+                    telemetry = {}
+                    if getattr(ind, "adaptive_override_managed", False):
+                        telemetry = {
+                            "session": get_current_session(),
+                            "score": session.get("last_signal_score"),
+                            "config_version": session.get("last_signal_config"),
+                            "direction": session.get("last_signal_direction"),
+                        }
+                    # SUPER e tutti gli altri segnali: sessione vuota come prima.
+                    agent.on_trade_closed(
+                        real_pnl,
+                        ind.atr_m5_val if hasattr(ind, 'atr_m5_val') else 0,
+                        telemetry.get("session", "") if telemetry else "",
+                        c.get("ticket"),
+                        **{k: v for k, v in telemetry.items() if k != "session"},
+                    )
                     log(trader_id, f"🧬 Adaptive: trade chiuso rilevato ticket={c.get('ticket')} pnl={real_pnl:.2f}")
             if agent.should_analyze():
                 new_params = agent.adjust()
@@ -476,7 +549,11 @@ class SignalStrategy:
             if not has_buy:
                 if self.reverse_on_buy(has_sell):
                     close_slave_position(trader_id)
-                send_order(trader_id, "buy")
+                send_order(
+                    trader_id, "buy",
+                    volume=getattr(ind, "_order_volume_buy", getattr(ind, "_order_volume", None)),
+                    volume_multiplier=getattr(ind, "_volume_multiplier_buy", getattr(ind, "_volume_multiplier", None)),
+                )
 
         elif self.sell_condition(ind) and direction_filter in ("sell", "both"):
             new_signal = "SELL"
@@ -487,7 +564,11 @@ class SignalStrategy:
             if not has_sell:
                 if self.reverse_on_sell(has_buy):
                     close_slave_position(trader_id)
-                send_order(trader_id, "sell")
+                send_order(
+                    trader_id, "sell",
+                    volume=getattr(ind, "_order_volume_sell", getattr(ind, "_order_volume", None)),
+                    volume_multiplier=getattr(ind, "_volume_multiplier_sell", getattr(ind, "_volume_multiplier", None)),
+                )
 
         else:
             action = self.on_hold_action(ind, has_buy, has_sell, prev_signal)
@@ -511,6 +592,10 @@ class SignalStrategy:
         with sessions_lock:
             if trader_id in sessions:
                 sessions[trader_id]["prev_signal"] = new_signal
+                if new_signal != "HOLD" and getattr(ind, "adaptive_override_managed", False):
+                    sessions[trader_id]["last_signal_score"] = getattr(ind, "_adaptive_score", None)
+                    sessions[trader_id]["last_signal_config"] = getattr(ind, "_adaptive_config_version", None)
+                    sessions[trader_id]["last_signal_direction"] = new_signal.lower()
 
 
 # ─────────────────────── CONCRETE STRATEGIES ───────────────────────
@@ -2068,10 +2153,183 @@ class SuperXauDecisionStrategy(SignalStrategy):
         return f"(ATR:{atr:.1f} SL:{sl_dyn} TP:{tp_dyn} REG:{regime}{score_str})"
 
 
+class SuperXauAdaptiveStrategy(SignalStrategy):
+    """SUPER_ADAPTIVE — SUPER con parametri per-trader, score continuo e contesto.
+
+    NON modifica SUPER: classe nuova, registrata con un nome nuovo. La logica
+    pura sta in ``super_adaptive_core`` e viene usata sia qui sia nel backtest.
+    """
+
+    name = "SUPER_ADAPTIVE"
+    requires_m1 = True
+    requires_m5 = True
+    requires_m15 = True
+    backtest_custom_indicators = True
+    needs_account_equity = True
+    quiet_holds = True
+
+    def __init__(self, params=None):
+        # Configurazione di base: può essere sovrascritta per singolo trader
+        # da run_signal_logic() tramite trader.strategy_params.
+        self.base_params = AdaptiveParams.from_dict(params)
+
+    def compute_indicators(self, df_m1, df_m5, df_m15, df_h1=None):
+        core = compute_adaptive_indicators(df_m1, df_m5, df_m15, self.base_params, shift=2)
+        return Indicators(
+            ema_fast=core["ema_fast"],
+            ema_slow=core["ema_slow"],
+            rsi_m1=core["rsi"],
+            rsi=core["rsi"],
+            macd=core["macd"],
+            macd_sig=core["macd_sig"],
+            hma_m5=core["hma"],
+            hma_m5_prev=core["hma_prev"],
+            trend_macro_up=core["macro_up"],
+            volatilty_expansion=core["expansion"],
+            is_spike=core["is_spike"],
+            atr_m5_val=core["atr_m5"],
+            atr_m1=core["atr_m1"],
+            atr_m15_pct=core["atr_pct"],
+            trend_score=core["trend_score"],
+            regime=core["regime"],
+            session_label=get_current_session(),
+            _adaptive_core=core,
+            _adaptive_base=self.base_params,
+            adaptive_override_managed=True,
+            _adaptive_state=None,
+        )
+
+    def prepare_signal_context(self, ind, session_label=None, state=None,
+                               agent_params=None, equity=None):
+        """Risolve parametri finali e score. Chiamata dal live e dal backtest."""
+        core = ind._adaptive_core
+        eff, ctx = effective_params(
+            ind._adaptive_base,
+            session_label or getattr(ind, "session_label", None) or get_current_session(),
+            core,
+            agent_params,
+        )
+        ind._adaptive_eff = eff
+        ind._adaptive_ctx = ctx
+        ind._adaptive_session = session_label or getattr(ind, "session_label", None)
+        ind._adaptive_state = state if state is not None else {}
+        ind._adaptive_equity = equity
+        ind._adaptive_config_version = eff.config_version
+        ind._adaptive_agent_params = agent_params or {}
+
+        for direction in ("buy", "sell"):
+            score, breakdown = compute_score(core, direction, eff)
+            setattr(ind, f"_adaptive_score_{direction}", score)
+            setattr(ind, f"_adaptive_bd_{direction}", breakdown)
+
+        try:
+            bar_id = int(pd.Timestamp(core.get("bar_time")).timestamp() // 60)
+        except Exception:
+            counter_state = ind._adaptive_state
+            counter_state["_bar_counter"] = int(counter_state.get("_bar_counter", 0)) + 1
+            bar_id = counter_state["_bar_counter"]
+        ind._adaptive_bar_id = bar_id
+        return ind
+
+    def _context(self, ind):
+        if getattr(ind, "_adaptive_state", None) is None:
+            self.prepare_signal_context(ind, getattr(ind, "session_label", None), {})
+        return ind._adaptive_eff, ind._adaptive_ctx
+
+    def _decide(self, ind, direction: str) -> bool:
+        eff, ctx = self._context(ind)
+        score = float(getattr(ind, f"_adaptive_score_{direction}", 0.0) or 0.0)
+        breakdown = getattr(ind, f"_adaptive_bd_{direction}", {}) or {}
+        ind._adaptive_score = score
+        ind._adaptive_breakdown = breakdown
+        ind._adaptive_direction = direction
+
+        state = ind._adaptive_state
+        score_history_update(state, direction, score, eff.hysteresis_bars)
+        if score >= eff.min_score_to_trigger:
+            trigger_register(state, direction, ind._adaptive_bar_id)
+
+        stable = hysteresis_ok(
+            state, direction, eff.score_threshold,
+            eff.hysteresis_bars, eff.hysteresis_hits,
+        )
+        fresh = trigger_fresh(state, direction, ind._adaptive_bar_id, eff.expiry_bars)
+        allowed = bool(ctx.get("allow_entry", True)) and entry_regime_ok(ind.regime)
+        ok = bool(allowed and score >= eff.score_threshold and stable and fresh)
+
+        sl, tp = dynamic_sl_tp(ind._adaptive_core, eff)
+        multiplier = size_multiplier(score, eff, 1.0)
+        order_volume = risk_based_lot(getattr(ind, "_adaptive_equity", None), sl, eff)
+
+        # Valori per direzione: buy_condition e sell_condition vengono
+        # valutati entrambi nel backtest, quindi i campi generici verrebbero
+        # sovrascritti dalla direzione sbagliata.
+        setattr(ind, f"_volume_multiplier_{direction}", multiplier)
+        setattr(ind, f"_order_volume_{direction}", order_volume)
+        setattr(ind, f"_adaptive_sl_{direction}", sl)
+        setattr(ind, f"_adaptive_tp_{direction}", tp)
+        ind._volume_multiplier = multiplier
+        ind._order_volume = order_volume
+        ind._adaptive_sl = sl
+        ind._adaptive_tp = tp
+        return ok
+
+    def buy_condition(self, ind) -> bool:
+        return self._decide(ind, "buy")
+
+    def sell_condition(self, ind) -> bool:
+        return self._decide(ind, "sell")
+
+    def reverse_on_buy(self, has_sell: bool) -> bool:
+        return False
+
+    def reverse_on_sell(self, has_buy: bool) -> bool:
+        return False
+
+    def get_dynamic_sl_tp(self, ind):
+        eff, _ = self._context(ind)
+        return dynamic_sl_tp(ind._adaptive_core, eff)
+
+    def get_log_details(self, ind) -> str:
+        eff, ctx = self._context(ind)
+        score = getattr(ind, "_adaptive_score", None)
+        if score is None:
+            score = max(
+                float(getattr(ind, "_adaptive_score_buy", 0.0) or 0.0),
+                float(getattr(ind, "_adaptive_score_sell", 0.0) or 0.0),
+            )
+        bd = getattr(ind, "_adaptive_breakdown", {}) or {}
+        sl_dyn = getattr(ind, "_final_sl", None) or getattr(ind, "_adaptive_sl", 0)
+        tp_dyn = getattr(ind, "_final_tp", None) or getattr(ind, "_adaptive_tp", 0)
+        atr = ind._adaptive_core["atr_m5"]
+        parts = [
+            f"SCORE:{score:.2f}",
+            f"TH:{eff.score_threshold:.2f}",
+            f"REG:{ind.regime}",
+            f"SESS:{getattr(ind, '_adaptive_session', '-')}",
+            f"ATR:{atr:.1f}",
+            f"SL:{sl_dyn}",
+            f"TP:{tp_dyn}",
+            f"VOL:{getattr(ind, '_volume_multiplier', 1.0):.2f}",
+            f"CFG:{eff.config_version}",
+        ]
+        if bd:
+            parts.append(
+                "F:[M:{:.1f} T:{:.1f} V:{:.1f} R:{:.1f}]".format(
+                    bd.get("momentum", 0), bd.get("trend", 0),
+                    bd.get("volatility", 0), bd.get("rsi", 0),
+                )
+            )
+        if getattr(ind, "_adaptive_agent_params", None):
+            parts.append("ADAPT")
+        return "(" + " ".join(parts) + ")"
+
+
 STRATEGIES = {
     "BASE_NOHOLD": NoReverseStrategy(),
     "EURUSD_NOHOLD": EurUsdStrategy(),
     "SUPER": SuperXauNoCloseStrategy(),
+    "SUPER_ADAPTIVE": SuperXauAdaptiveStrategy(),
     "SUPER_DM": SuperXauDecisionStrategy(),
     "SUPER_PRO": SuperXauProStrategy(),
     "SUPER_LIVE": SuperXauLiveStrategy(),
@@ -2098,7 +2356,12 @@ def run_signal_logic(trader_id: int):
         trader = sessions[trader_id]["trader"]
 
     chosen = trader.selected_signal or "BASE"
-    strategy = STRATEGIES.get(chosen, DEFAULT_STRATEGY)
+    if chosen == "SUPER_ADAPTIVE":
+        # Istanza per-trader: i parametri JSON non devono essere condivisi
+        # tra trader diversi (STRATEGIES contiene singleton).
+        strategy = SuperXauAdaptiveStrategy(getattr(trader, "strategy_params", None))
+    else:
+        strategy = STRATEGIES.get(chosen, DEFAULT_STRATEGY)
     strategy.run(trader_id)
 
 
@@ -2151,6 +2414,15 @@ def start_polling(trader: Trader):
         cursor.close()
         conn.close()
 
+    # SUPER_ADAPTIVE: l'agente adaptive viene avviato automaticamente
+    # (gli altri segnali restano invariati, eventuale toggle manuale preservato).
+    if trader.selected_signal == "SUPER_ADAPTIVE" and not adaptive_routes.get_agent(tid):
+        adaptive_routes.start_adaptive(adaptive_routes.AdaptiveStartRequest(
+            trader_id=tid,
+            strategy_name="SUPER_ADAPTIVE",
+            symbol=trader.selected_symbol or "XAUUSD",
+        ))
+
     global_log(f"▶ START {trader.name} | {trader.selected_symbol}")
     polling_loop_timer(tid)
     return {"status": "started", "trader_id": tid}
@@ -2174,6 +2446,9 @@ def stop_polling(req: StopPollingRequest):
                 timer.cancel()
             trader_name = trader.name if trader else str(trader_id)
             trader_symbol = trader.selected_symbol if trader else "?"
+            agent = adaptive_routes.get_agent(trader_id)
+            if agent and getattr(agent, "strategy_name", None) == "SUPER_ADAPTIVE":
+                adaptive_routes.stop_adaptive(adaptive_routes.AdaptiveStopRequest(trader_id=trader_id))
             del sessions[trader_id]
             global_log(f"⏹ STOP {trader_name} | {trader_symbol}")
             return {"status": "stopped", "trader_id": trader_id}

@@ -270,6 +270,17 @@
         <h6>📝 Note</h6>
         <textarea [(ngModel)]="trader.notes" rows="3" placeholder="Note sul trader..."></textarea>
       </div>
+
+      <div class="notes-section" *ngIf="trader.selected_signal === 'SUPER_ADAPTIVE'">
+        <h6>⚙️ Parametri SUPER_ADAPTIVE (JSON)</h6>
+        <textarea
+          rows="6"
+          spellcheck="false"
+          placeholder='{"score_threshold": 0.68, "risk_pct": 0.5}'
+          [ngModel]="getStrategyParamsText(trader)"
+          (ngModelChange)="setStrategyParamsText(trader, $event)"></textarea>
+        <small>Lascia vuoto per i default. Valori non validi vengono ignorati dal backend.</small>
+      </div>
       </div>
 
       <div class="save-section">

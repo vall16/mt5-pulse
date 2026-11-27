@@ -53,6 +53,7 @@ export class SignalResearchComponent implements OnInit {
 
   strategyTimeframes: { [key: string]: string } = {
     'SUPER': 'M1+M5+M15',
+    'SUPER_ADAPTIVE': 'M1+M5+M15',
     'SUPER_DM': 'M1+M5+M15',
     'SUPER_PRO': 'M1+M5+M15',
     'SUPER_LIVE': 'M1+M5+M15',
@@ -71,6 +72,7 @@ export class SignalResearchComponent implements OnInit {
 
   strategyDefaults: { [key: string]: { sl_min: number; sl_max: number; sl_step: number; tp_min: number; tp_max: number; tp_step: number } } = {
     'SUPER': { sl_min: 100, sl_max: 600, sl_step: 50, tp_min: 200, tp_max: 1200, tp_step: 50 },
+    'SUPER_ADAPTIVE': { sl_min: 100, sl_max: 600, sl_step: 50, tp_min: 200, tp_max: 1200, tp_step: 50 },
     'SUPER_DM': { sl_min: 100, sl_max: 600, sl_step: 50, tp_min: 200, tp_max: 1200, tp_step: 50 },
     'SUPER_PRO': { sl_min: 100, sl_max: 400, sl_step: 50, tp_min: 200, tp_max: 1000, tp_step: 50 },
     'SUPER_LIVE': { sl_min: 100, sl_max: 600, sl_step: 50, tp_min: 200, tp_max: 1200, tp_step: 50 },
@@ -89,6 +91,7 @@ export class SignalResearchComponent implements OnInit {
 
   strategyDescriptions: { [key: string]: string } = {
     'SUPER': 'Trend-following entry on M1 with M5/M15 confirmation. Best for trending markets.',
+    'SUPER_ADAPTIVE': 'SUPER with per-trader JSON params, session x regime matrix, continuous score, hysteresis, expiry, volatility targeting and adaptive sizing. Same indicators live and in backtest.',
     'SUPER_DM': 'SUPER + Decision Model: multi-factor weighted scoring (momentum, trend, volatility, RSI). Trade only if score >= 0.65. Filters weak signals.',
     'SUPER_PRO': 'SUPER entry + reduced risk from M5/M15 filters. Stricter but higher quality signals.',
     'SUPER_LIVE': 'SUPER variant for live trading. Same logic as SUPER with production-tuned parameters.',

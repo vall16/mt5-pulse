@@ -27,6 +27,21 @@ from threading import Lock
 load_dotenv()
 
 
+def parse_strategy_params(value):
+    """Converte il JSON di strategy_params in dict; None se vuoto/invalido."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else None
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
 # pool = mysql.connector.pooling.MySQLConnectionPool(
 #     pool_name=os.environ.get("MYSQL_POOL_NAME"),
 #     pool_size=int(os.environ.get("MYSQL_POOL_SIZE")),
@@ -213,6 +228,23 @@ def run_migrations():
     except Exception as e:
         log(f"⚠️ Migration notes saltata: {e}")
 
+    # Migration: aggiungi strategy_params ai traders se manca (SUPER_ADAPTIVE)
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SHOW COLUMNS FROM traders WHERE Field='strategy_params'")
+        if not cursor.fetchone():
+            log("🔧 Migration: aggiungo colonna strategy_params a traders...")
+            cursor.execute("ALTER TABLE traders ADD COLUMN strategy_params TEXT NULL")
+            conn.commit()
+            log("✅ Migration completata: strategy_params aggiunta")
+        else:
+            log("✅ Migration strategy_params già applicata")
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        log(f"⚠️ Migration strategy_params saltata: {e}")
+
     # Migration: aggiungi sort_order ai servers se manca
     for attempt in range(3):
         try:
@@ -271,6 +303,7 @@ def ensure_servers_sort_order():
 def get_trader(cursor, trader_id):
     cursor.execute("""
         SELECT t.id, t.name, t.moltiplicatore, t.fix_lot, t.sl, t.tp, t.tsl,
+               t.selected_signal, t.selected_symbol, t.sessions_filter, t.strategy_params,
                ms.server AS master_name, ms.user AS master_user, ms.pwd AS master_pwd, ms.path AS master_path, ms.ip AS master_ip, ms.port AS master_port,
                ss.server AS slave_name, ss.user AS slave_user, ss.pwd AS slave_pwd, ss.path AS slave_path, ss.ip AS slave_ip, ss.port AS slave_port
         FROM traders t
@@ -289,6 +322,8 @@ def get_trader(cursor, trader_id):
     # log(trader["master_ip"])
     # log(trader["master_port"])
 
+    if trader is not None:
+        trader["strategy_params"] = parse_strategy_params(trader.get("strategy_params"))
     return trader
 
 
@@ -659,6 +694,7 @@ def get_traders():
             "direction_filter": row.get("direction_filter") or "both",
             "sessions_filter": row.get("sessions_filter", "ASIA,LONDON,NY-LON,NY,OFF"),
             "notes": row.get("notes"),
+            "strategy_params": parse_strategy_params(row.get("strategy_params")),
             "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
             "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
         })
@@ -673,8 +709,9 @@ def insert_trader(trader: Newtrader):
         query = """
         INSERT INTO traders
         (name, master_server_id, slave_server_id, 
-         sl, tp, tsl, moltiplicatore, fix_lot, is_active, created_at, updated_at)
-        VALUES (%s,  %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+         sl, tp, tsl, moltiplicatore, fix_lot, is_active, created_at, updated_at,
+         strategy_params)
+        VALUES (%s,  %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         now = datetime.now()
@@ -690,7 +727,8 @@ def insert_trader(trader: Newtrader):
             trader.fix_lot,
             trader.status == 'active',  # converte 'active'/'inactive' in booleano
             now,
-            now
+            now,
+            json.dumps(trader.strategy_params, ensure_ascii=False) if trader.strategy_params else None,
         )
 
 
@@ -823,6 +861,15 @@ def update_trader_servers(trader_id: int, update: TraderServersUpdate):
             if cursor.fetchone():
                 fields.append("notes = %s")
                 values.append(update.notes)
+        except Exception:
+            pass
+
+    if update.strategy_params is not None:
+        try:
+            cursor.execute("SHOW COLUMNS FROM traders WHERE Field='strategy_params'")
+            if cursor.fetchone():
+                fields.append("strategy_params = %s")
+                values.append(json.dumps(update.strategy_params, ensure_ascii=False))
         except Exception:
             pass
 
@@ -1695,6 +1742,8 @@ class BacktestRequest(PydanticBaseModel):
     balance: float = 10000.0
     trader_id: int | None = None
     direction: str = "both"
+    # SUPER_ADAPTIVE: parametri opzionali per il backtest
+    strategy_params: dict | None = None
 
 @router.post("/backtest")
 def run_backtest_endpoint(req: BacktestRequest):
@@ -1754,6 +1803,7 @@ def run_backtest_endpoint(req: BacktestRequest):
                 cancel_flag=lambda: backtest_sessions.get(session_id, {}).get("cancelled", False),
                 progress_callback=on_progress,
                 direction=req.direction,
+                strategy_params=req.strategy_params,
             )
             with backtest_lock:
                 if session_id in backtest_sessions:

@@ -1,4 +1,5 @@
 # --- SUPERVISOR ROUTES: API per l'agente AI che gestisce N strategie ---
+import json
 from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -11,7 +12,10 @@ from strategy_supervisor import (
     run_now,
     get_status,
     update_config,
+    _is_running,
 )
+from db import get_connection, parse_strategy_params
+from super_adaptive_core import AdaptiveParams
 from models import Trader
 from trading_signals_multi2 import start_polling, stop_polling, StopPollingRequest
 
@@ -32,6 +36,8 @@ class SupervisorConfigRequest(BaseModel):
 class ApplyRequest(BaseModel):
     trader_id: int
     action: str
+    # SUPER_ADAPTIVE: parametri da applicare con action=APPLY_PARAMS
+    params: Optional[dict] = None
 
 
 # ------------------------------------------------------------------ #
@@ -97,16 +103,16 @@ def _build_trader_from_db(row: dict) -> Trader:
         sessions_filter=row.get("sessions_filter") or "ASIA,LONDON,NY-LON,NY,OFF",
         direction_filter="both",
         broker=row.get("broker"),
+        strategy_params=parse_strategy_params(row.get("strategy_params")),
     )
 
 
 @router.post("/apply")
 def apply(req: ApplyRequest):
     action = req.action.strip().upper()
-    if action not in ("ACTIVE", "PAUSE"):
-        return {"status": "ko", "message": "Azione non supportata (attese ACTIVE o PAUSE)"}
+    if action not in ("ACTIVE", "PAUSE", "APPLY_PARAMS"):
+        return {"status": "ko", "message": "Azione non supportata (attese ACTIVE, PAUSE o APPLY_PARAMS)"}
 
-    from db import get_connection
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -123,6 +129,58 @@ def apply(req: ApplyRequest):
 
     if not row:
         return {"status": "ko", "message": "Trader non trovato"}
+
+    if action == "APPLY_PARAMS":
+        if row.get("selected_signal") != "SUPER_ADAPTIVE":
+            return {"status": "ko", "message": "APPLY_PARAMS e' solo per SUPER_ADAPTIVE"}
+        if not req.params:
+            return {"status": "ko", "message": "Nessun parametro fornito"}
+
+        current = parse_strategy_params(row.get("strategy_params")) or {}
+        merged = dict(current)
+        merged.update(req.params)
+        validated = AdaptiveParams.from_dict(merged).to_dict()
+        validated["config_version"] = int(validated.get("config_version", 1)) + 1
+        payload = json.dumps(validated, ensure_ascii=False)
+
+        write_conn = get_connection()
+        write_cursor = write_conn.cursor()
+        try:
+            write_cursor.execute(
+                "UPDATE traders SET strategy_params = %s WHERE id = %s",
+                (payload, req.trader_id),
+            )
+            write_conn.commit()
+        finally:
+            write_cursor.close()
+            write_conn.close()
+
+        # Aggiorna anche l'AdaptiveAgent in memoria, se attivo.
+        from adaptive_routes import get_agent
+        agent = get_agent(req.trader_id)
+        agent_params = None
+        if agent:
+            agent_params = agent.apply_params(req.params)
+
+        was_running = _is_running(req.trader_id)
+        if was_running:
+            stop_polling(StopPollingRequest(trader_id=req.trader_id))
+            row["strategy_params"] = payload
+            start_polling(_build_trader_from_db(row))
+
+        global_log(
+            f"🧠 Supervisor: parametri SUPER_ADAPTIVE applicati al trader {req.trader_id} "
+            f"(versione {validated['config_version']})"
+        )
+        return {
+            "status": "ok",
+            "action": "APPLY_PARAMS",
+            "trader_id": req.trader_id,
+            "config_version": validated["config_version"],
+            "params": validated,
+            "agent_params": agent_params,
+            "polling_restarted": was_running,
+        }
 
     if action == "PAUSE":
         stop_polling(StopPollingRequest(trader_id=req.trader_id))

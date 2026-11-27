@@ -67,6 +67,7 @@ export class UserDashboardComponent implements OnInit {
 
   availableSignals = [
   { value: 'SUPER', label: 'XAUUSD Super' },
+  { value: 'SUPER_ADAPTIVE', label: 'XAUUSD Super Adaptive' },
   { value: 'SUPER_DM', label: 'XAUUSD Super DM' },
   { value: 'SUPER_LIVE', label: 'XAUUSD Super Live' },
   { value: 'SUPER_PRO', label: 'XAUUSD Super Pro' },
@@ -91,6 +92,31 @@ export class UserDashboardComponent implements OnInit {
   ];
 
   sessionsDropdownOpen: { [traderId: number]: boolean } = {};
+
+  // SUPER_ADAPTIVE: editor JSON dei parametri per trader
+  paramsEditor: { [traderId: number]: string } = {};
+
+  getStrategyParamsText(trader: Trader): string {
+    if (this.paramsEditor[trader.id] !== undefined) {
+      return this.paramsEditor[trader.id];
+    }
+    const params = trader.strategy_params;
+    if (!params) {
+      return '';
+    }
+    if (typeof params === 'string') {
+      return params;
+    }
+    try {
+      return JSON.stringify(params, null, 2);
+    } catch {
+      return '';
+    }
+  }
+
+  setStrategyParamsText(trader: Trader, value: string): void {
+    this.paramsEditor[trader.id] = value;
+  }
 
   toggleSessionsDropdown(traderId: number) {
     this.sessionsDropdownOpen[traderId] = !this.sessionsDropdownOpen[traderId];
@@ -618,6 +644,23 @@ saveTrader(trader: Trader) {
   });
   console.log('──────────────────────────────────────────');
 
+  // SUPER_ADAPTIVE: valida il JSON prima di salvare.
+  let strategyParams: Record<string, any> | null = null;
+  const paramsText = (this.paramsEditor[trader.id] ?? '').trim();
+  if (paramsText) {
+    try {
+      const parsed = JSON.parse(paramsText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Il JSON deve essere un oggetto');
+      }
+      strategyParams = parsed;
+    } catch (err: any) {
+      alert(`Parametri SUPER_ADAPTIVE non validi: ${err?.message || err}`);
+      return;
+    }
+  }
+  trader.strategy_params = strategyParams;
+
   this.traderService.updateTraderServers(
     trader.id!,
     trader.master_server_id ?? null,
@@ -632,7 +675,8 @@ saveTrader(trader: Trader) {
     trader.selected_symbol ?? null,
     trader.sessions_filter ?? null,
     trader.notes ?? null,
-    trader.name ?? null
+    trader.name ?? null,
+    strategyParams
   ).subscribe({
     next: (res) => {
       console.log('✅ [UPDATE OK] Trader aggiornato dal backend:', res);

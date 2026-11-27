@@ -6,7 +6,7 @@ import requests
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from trading_signals_multi2 import STRATEGIES, Indicators, compute_regime, REGIME_WINDOW
+from trading_signals_multi2 import STRATEGIES, Indicators, compute_regime, REGIME_WINDOW, SuperXauAdaptiveStrategy
 from indicators.ta import compute_ema, compute_rsi, compute_macd, compute_atr, compute_hma, compute_ichimoku, compute_rolling_percentile
 
 TIMEFRAME_MAP = {
@@ -254,6 +254,14 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
     _print = print if verbose else lambda *a, **k: None
     trades = []
     position = None
+    trade_lot = lot
+    backtest_state = {}  # stato per hysteresis/expiry di SUPER_ADAPTIVE
+    adaptive_meta = {}   # telemetria SUPER_ADAPTIVE da attachare ad ogni trade
+
+    def _tag_trade(t):
+        if adaptive_meta:
+            t.update(adaptive_meta)
+        return t
 
     df_m1 = dfs.get("m1")
     df_m5 = dfs.get("m5")
@@ -285,7 +293,9 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
     pip = instr["pip"]
     contract = instr["contract"]
 
-    if not skip_indicators:
+    # SUPER_ADAPTIVE usa i propri indicatori, ma il percorso storico viene
+    # comunque costruito: con skip_indicators servono le colonne precalcolate.
+    if not skip_indicators or getattr(strategy, "backtest_custom_indicators", False):
         _print("Pre-calcolo indicatori...")
         precompute_indicators(dfs)
 
@@ -371,29 +381,29 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
 
             if direction == "buy":
                 if low <= sl:
-                    pnl = (sl - entry) * lot * contract
+                    pnl = (sl - entry) * trade_lot * contract
                     balance += pnl
                     _print(f"{ts_str} BUY SL @ {sl:.2f} | PnL: {pnl:.2f} | Bal: {balance:.2f}")
-                    trades.append({"time": ts, "type": "BUY", "exit": "SL", "pnl": pnl, "balance": balance})
+                    trades.append(_tag_trade({"time": ts, "type": "BUY", "exit": "SL", "pnl": pnl, "balance": balance}))
                     position = None
                 elif high >= tp:
-                    gain = (tp - entry) * lot * contract
+                    gain = (tp - entry) * trade_lot * contract
                     balance += gain
                     _print(f"{ts_str} BUY TP @ {tp:.2f} | PnL: {gain:.2f} | Bal: {balance:.2f}")
-                    trades.append({"time": ts, "type": "BUY", "exit": "TP", "pnl": gain, "balance": balance})
+                    trades.append(_tag_trade({"time": ts, "type": "BUY", "exit": "TP", "pnl": gain, "balance": balance}))
                     position = None
             else:
                 if high >= sl:
-                    pnl = (entry - sl) * lot * contract
+                    pnl = (entry - sl) * trade_lot * contract
                     balance += pnl
                     _print(f"{ts_str} SELL SL @ {sl:.2f} | PnL: {pnl:.2f} | Bal: {balance:.2f}")
-                    trades.append({"time": ts, "type": "SELL", "exit": "SL", "pnl": pnl, "balance": balance})
+                    trades.append(_tag_trade({"time": ts, "type": "SELL", "exit": "SL", "pnl": pnl, "balance": balance}))
                     position = None
                 elif low <= tp:
-                    gain = (entry - tp) * lot * contract
+                    gain = (entry - tp) * trade_lot * contract
                     balance += gain
                     _print(f"{ts_str} SELL TP @ {tp:.2f} | PnL: {gain:.2f} | Bal: {balance:.2f}")
-                    trades.append({"time": ts, "type": "SELL", "exit": "TP", "pnl": gain, "balance": balance})
+                    trades.append(_tag_trade({"time": ts, "type": "SELL", "exit": "TP", "pnl": gain, "balance": balance}))
                     position = None
 
             if position is not None and hasattr(strategy, 'on_hold_action'):
@@ -418,12 +428,12 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
                 if action in ("close_buy", "close_sell"):
                     close_dir = "buy" if action == "close_buy" else "sell"
                     if direction == "buy":
-                        pnl = (price - entry) * lot * contract
+                        pnl = (price - entry) * trade_lot * contract
                     else:
-                        pnl = (entry - price) * lot * contract
+                        pnl = (entry - price) * trade_lot * contract
                     balance += pnl
                     _print(f"{ts_str} {action.upper()} @ {price:.2f} | PnL: {pnl:.2f} | Bal: {balance:.2f}")
-                    trades.append({"time": ts, "type": direction.upper(), "exit": "HOLD_EXIT", "pnl": pnl, "balance": balance})
+                    trades.append(_tag_trade({"time": ts, "type": direction.upper(), "exit": "HOLD_EXIT", "pnl": pnl, "balance": balance}))
                     position = None
 
         if position is None and i % entry_step == 0:
@@ -541,6 +551,31 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
                 vol_avg = m5_arr["vol_avg"][i]
                 ind.volume_ok = vol_now > vol_avg * 0.8 if pd.notna(vol_avg) and vol_avg > 0 else True
 
+            # ── SUPER_ADAPTIVE: indicatori condivisi con il live ──
+            # Solo per il nuovo segnale: gli altri restano sul percorso storico.
+            if getattr(strategy, "backtest_custom_indicators", False):
+                try:
+                    m1_slice = df_m1.iloc[max(0, i - 300):i + 1] if use_m1 else None
+                    m5_slice = None
+                    m15_slice = None
+                    if use_m5:
+                        idx_bt = int(m5_end.searchsorted(ts, side="right")) - 1
+                        if idx_bt >= 0:
+                            m5_slice = df_m5.iloc[max(0, idx_bt - 250):idx_bt + 1]
+                    if use_m15:
+                        idx_bt15 = int(m15_end.searchsorted(ts, side="right")) - 1
+                        if idx_bt15 >= 0:
+                            m15_slice = df_m15.iloc[max(0, idx_bt15 - 250):idx_bt15 + 1]
+                    ind = strategy.compute_indicators(m1_slice, m5_slice, m15_slice)
+                    ind.session_label = _get_session_label(ts)
+                    strategy.prepare_signal_context(
+                        ind, ind.session_label, backtest_state, None, balance,
+                    )
+                except Exception as e:
+                    if i == start_idx or i % 5000 == 0:
+                        _print(f"  WARN custom indicators @ bar {i}: {type(e).__name__}: {e}")
+                    continue
+
             try:
                 buy = strategy.buy_condition(ind)
                 sell = strategy.sell_condition(ind)
@@ -562,22 +597,52 @@ def run_backtest(strategy, dfs, symbol, lot, balance, cancel_flag=None, progress
                 direction = "sell"
 
             if direction:
-                if sl_pts_override is not None:
-                    sl_pts = sl_pts_override
+                if getattr(strategy, "backtest_custom_indicators", False):
+                    # SUPER_ADAPTIVE: SL/TP e lotto gia calcolati per direzione
+                    # dentro _decide(), identici al percorso live.
+                    sl_pts = getattr(ind, f"_adaptive_sl_{direction}", None) or DEFAULT_SL
+                    tp_pts = getattr(ind, f"_adaptive_tp_{direction}", None) or DEFAULT_TP
+                    vol = getattr(ind, f"_order_volume_{direction}", None)
+                    mult = getattr(ind, f"_volume_multiplier_{direction}", 1.0)
+                    trade_lot = round(float(vol) * float(mult), 2) if vol else round(lot * float(mult or 1.0), 2)
+                    trade_lot = max(0.01, min(trade_lot, 100.0))
+                    adaptive_meta = {
+                        "regime": getattr(ind, "regime", None),
+                        "session": getattr(ind, "session_label", None),
+                        "score": getattr(ind, f"_adaptive_score_{direction}", None),
+                        "config_version": getattr(ind, "_adaptive_config_version", None),
+                        "lot": trade_lot,
+                    }
                 else:
-                    sl_pts_dyn, _ = strategy.get_dynamic_sl_tp(ind)
-                    sl_pts = sl_pts_dyn if sl_pts_dyn is not None else DEFAULT_SL
-                if tp_pts_override is not None:
-                    tp_pts = tp_pts_override
-                else:
-                    _, tp_pts_dyn = strategy.get_dynamic_sl_tp(ind)
-                    tp_pts = tp_pts_dyn if tp_pts_dyn is not None else DEFAULT_TP
+                    trade_lot = lot
+                    if sl_pts_override is not None:
+                        sl_pts = sl_pts_override
+                    else:
+                        sl_pts_dyn, _ = strategy.get_dynamic_sl_tp(ind)
+                        sl_pts = sl_pts_dyn if sl_pts_dyn is not None else DEFAULT_SL
+                    if tp_pts_override is not None:
+                        tp_pts = tp_pts_override
+                    else:
+                        _, tp_pts_dyn = strategy.get_dynamic_sl_tp(ind)
+                        tp_pts = tp_pts_dyn if tp_pts_dyn is not None else DEFAULT_TP
 
                 sl_price = price - (sl_pts * pip) if direction == "buy" else price + (sl_pts * pip)
                 tp_price = price + (tp_pts * pip) if direction == "buy" else price - (tp_pts * pip)
                 position = (price, direction, sl_price, tp_price)
                 log = strategy.get_log_details(ind) if hasattr(strategy, "get_log_details") else ""
-                _print(f"{ts_str} ENTRY {direction.upper()} @ {price:.2f} SL={sl_price:.2f} TP={tp_price:.2f} | {log}")
+                # Il lotto compare solo per SUPER_ADAPTIVE: gli altri segnali
+                # mantengono la riga di log storica, byte per byte.
+                if getattr(strategy, "backtest_custom_indicators", False):
+                    entry_log = (
+                        f"{ts_str} ENTRY {direction.upper()} @ {price:.2f} "
+                        f"SL={sl_price:.2f} TP={tp_price:.2f} LOT={trade_lot} | {log}"
+                    )
+                else:
+                    entry_log = (
+                        f"{ts_str} ENTRY {direction.upper()} @ {price:.2f} "
+                        f"SL={sl_price:.2f} TP={tp_price:.2f} | {log}"
+                    )
+                _print(entry_log)
 
     _print(f"\nDEBUG: evaluated={_dbg_evaluated} buy_signals={_dbg_buy_signals} sell_signals={_dbg_sell_signals}")
 
@@ -837,10 +902,13 @@ def compute_summary(trades, balance, initial_balance, days=None):
     }
 
 
-def run_backtest_api(strategy_name, symbol, days, lot, balance, mt5_api_url, cancel_flag=None, progress_callback=None, direction="both", pre_fetched_dfs=None, skip_indicators=False, sl_pts=None, tp_pts=None, verbose=True):
+def run_backtest_api(strategy_name, symbol, days, lot, balance, mt5_api_url, cancel_flag=None, progress_callback=None, direction="both", pre_fetched_dfs=None, skip_indicators=False, sl_pts=None, tp_pts=None, verbose=True, strategy_params=None):
     strategy = STRATEGIES.get(strategy_name)
     if not strategy:
         return {"error": f"Unknown strategy: {strategy_name}"}
+    if strategy_name == "SUPER_ADAPTIVE" and strategy_params:
+        # Configurazione per-backtest, senza toccare il singleton condiviso.
+        strategy = SuperXauAdaptiveStrategy(strategy_params)
 
     try:
         if pre_fetched_dfs is not None:

@@ -60,7 +60,7 @@ interface BacktestResult {
 })
 export class BacktestComponent implements OnDestroy, OnInit {
   strategies = [
-    'SUPER', 'SUPER_DM', 'SUPER_LIVE', 'SUPER_PRO', 'SUPER_USDJPY',
+    'SUPER', 'SUPER_ADAPTIVE', 'SUPER_DM', 'SUPER_LIVE', 'SUPER_PRO', 'SUPER_USDJPY',
     'BASE', 'BASE_NOHOLD', 'TRENDGUARD', 'TRENDGUARD_XAU',
     'ICHIMOKU', 'EURUSD_NOHOLD',
     'MSFT', 'NVDA',

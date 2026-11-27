@@ -102,7 +102,8 @@ export class TraderService {
         selected_symbol: trader.selected_symbol,
         direction_filter: trader.direction_filter ?? 'both',
         sessions_filter: trader.sessions_filter,
-        notes: trader.notes
+        notes: trader.notes,
+        strategy_params: trader.strategy_params
 
       })))
     );
@@ -147,6 +148,8 @@ export class TraderService {
     sessions_filter?: string | null,
     notes?: string | null,
     name?: string | null,
+    // SUPER_ADAPTIVE: configurazione JSON per-trader
+    strategy_params?: Record<string, any> | string | null,
     // copyInterval?: number | null
 
   ) {
@@ -166,6 +169,7 @@ export class TraderService {
       selected_symbol: selected_symbol,
       sessions_filter: sessions_filter,
       notes: notes,
+      strategy_params: strategy_params,
       // copy_interval: copyInterval
 
     });

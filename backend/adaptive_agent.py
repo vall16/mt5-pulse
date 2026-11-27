@@ -76,10 +76,12 @@ class AdaptiveAgent:
     #  REGISTRAZIONE TRADE
     # ------------------------------------------------------------------ #
 
-    def on_trade_closed(self, pnl: float, atr_at_entry: float, session: str = "", ticket: Optional[int] = None):
+    def on_trade_closed(self, pnl: float, atr_at_entry: float, session: str = "",
+                        ticket: Optional[int] = None, score: Optional[float] = None,
+                        config_version: Optional[int] = None, direction: Optional[str] = None):
         """
-        Registra un trade chiuso. Chiamato dal polling loop quando
-        un trade sparisce dalle posizioni aperte.
+        Registra un trade chiuso. I campi opzionali (score/config/direzione)
+        sono usati da SUPER_ADAPTIVE; gli altri segnali li lasciano a None.
         """
         with self._lock:
             record = {
@@ -90,6 +92,14 @@ class AdaptiveAgent:
                 "result": "win" if pnl > 0 else "loss",
                 "timestamp": datetime.now(ZoneInfo("Europe/Rome")).isoformat(),
             }
+            # I campi aggiuntivi esistono solo per SUPER_ADAPTIVE: gli altri
+            # segnali mantengono esattamente il record storico.
+            if score is not None:
+                record["score"] = round(float(score), 3)
+            if config_version is not None:
+                record["config_version"] = config_version
+            if direction is not None:
+                record["direction"] = direction
             self.trade_log.append(record)
             if len(self.trade_log) > self._max_log:
                 self.trade_log = self.trade_log[-self._max_log:]
@@ -117,6 +127,17 @@ class AdaptiveAgent:
             avg_loss = abs(sum(t["pnl"] for t in losses) / len(losses)) if losses else 0.01
             rr_ratio = avg_win / avg_loss if avg_loss > 0 else 0
 
+            # Statistiche per sessione solo per SUPER_ADAPTIVE: per gli altri
+            # segnali lo stats dict resta identico a prima.
+            by_session: dict = {}
+            if self.strategy_name == "SUPER_ADAPTIVE":
+                for t in trades:
+                    key = t.get("session") or "-"
+                    agg = by_session.setdefault(key, {"total": 0, "wins": 0, "pnl": 0.0})
+                    agg["total"] += 1
+                    agg["wins"] += 1 if t["result"] == "win" else 0
+                    agg["pnl"] += float(t.get("pnl", 0))
+
             self.stats = {
                 "win_rate": round(win_rate * 100, 1),
                 "avg_win": round(avg_win, 2),
@@ -128,6 +149,15 @@ class AdaptiveAgent:
                 "sl_atr_factor": self.params["sl_atr_factor"],
                 "tp_atr_factor": self.params["tp_atr_factor"],
             }
+            if self.strategy_name == "SUPER_ADAPTIVE":
+                self.stats["by_session"] = {
+                    k: {
+                        "total": v["total"],
+                        "win_rate": round(100.0 * v["wins"] / max(1, v["total"]), 1),
+                        "pnl": round(v["pnl"], 2),
+                    }
+                    for k, v in by_session.items()
+                }
             return self.stats
 
     # ------------------------------------------------------------------ #
@@ -202,6 +232,23 @@ class AdaptiveAgent:
     # ------------------------------------------------------------------ #
 
     def get_params(self) -> dict:
+        return dict(self.params)
+
+    def apply_params(self, params: dict) -> dict:
+        """Applica parametri proposti dal supervisore, con guardrail."""
+        for key, low, high in (
+            ("sl_atr_factor", 1.5, 5.0),
+            ("tp_atr_factor", 1.0, 4.0),
+        ):
+            value = (params or {}).get(key)
+            if value is None:
+                continue
+            try:
+                self.params[key] = round(min(max(float(value), low), high), 2)
+            except (TypeError, ValueError):
+                continue
+        self.last_adjustment = datetime.now(ZoneInfo("Europe/Rome")).isoformat()
+        self.adjustment_count += 1
         return dict(self.params)
 
     def get_status(self) -> dict:

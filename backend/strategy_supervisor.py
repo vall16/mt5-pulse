@@ -21,8 +21,9 @@ import pandas as pd
 import requests
 
 from logger import log as global_log
-from db import get_connection
+from db import get_connection, parse_strategy_params
 from indicators.ta import compute_atr, compute_rolling_percentile
+from super_adaptive_core import AdaptiveParams
 from trading_signals_multi2 import (
     get_data,
     get_current_session,
@@ -69,7 +70,7 @@ def _load_traders() -> list[dict]:
     try:
         cursor.execute("""
             SELECT t.id, t.name, t.is_active, t.selected_signal, t.selected_symbol,
-                   t.custom_signal_interval, t.sessions_filter,
+                   t.custom_signal_interval, t.sessions_filter, t.strategy_params,
                    ss.id AS slave_server_id, ss.ip AS slave_ip, ss.port AS slave_port
             FROM traders t
             LEFT JOIN servers ss ON ss.id = t.slave_server_id
@@ -195,6 +196,8 @@ def _collect_states(cfg: dict) -> list[dict]:
         if allowed and tid not in allowed:
             continue
 
+        params = parse_strategy_params(t.get("strategy_params"))
+
         slave_ip = t.get("slave_ip")
         slave_port = t.get("slave_port")
         if not slave_ip or not slave_port:
@@ -211,6 +214,7 @@ def _collect_states(cfg: dict) -> list[dict]:
                     "total_trades": 0, "win_rate": None,
                     "consecutive_losses": 0, "net_profit_30": 0.0,
                 },
+                "params": params,
             })
             continue
 
@@ -231,6 +235,7 @@ def _collect_states(cfg: dict) -> list[dict]:
             "open_positions": pos,
             "market": market,
             "performance": perf,
+            "params": params,
         })
 
     return states
@@ -269,9 +274,16 @@ def _safety_check(state: dict, cfg: dict) -> tuple[Optional[str], Optional[str]]
 
 def _build_prompt(states: list[dict]) -> str:
     lines = []
+    bounds = AdaptiveParams.bounds()
+    bounds_txt = ", ".join(f"{k}:[{lo},{hi}]" for k, (lo, hi) in bounds.items())
     for s in states:
         m = s.get("market") or {}
         p = s.get("performance") or {}
+        params_txt = ""
+        if s.get("strategy") == "SUPER_ADAPTIVE":
+            params_txt = (
+                f"\n  parametri_attuali={json.dumps(s.get('params') or {}, ensure_ascii=False)}"
+            )
         lines.append(
             f"- trader_id={s['trader_id']} | nome={s['name']} | strategia={s['strategy']} | "
             f"simbolo={s['symbol']} | stato={s['current_status']} | posizioni_aperte={s.get('open_positions', 0)}\n"
@@ -279,6 +291,7 @@ def _build_prompt(states: list[dict]) -> str:
             f"regime={m.get('regime', '?')} atr_m5={m.get('atr_m5', '?')} atr_m15_pct={m.get('atr_m15_pct', '?')}\n"
             f"  performance: trade_ultimi30={p.get('total_trades')} win_rate={p.get('win_rate')} "
             f"perdite_consecutive={p.get('consecutive_losses')} pnl_30={p.get('net_profit_30')}"
+            f"{params_txt}"
         )
 
     strategies_info = "\n".join(
@@ -309,6 +322,12 @@ Considera per ogni strategia:
 - Presenza di posizioni aperte.
 Metti in PAUSE le strategie in regime NEWS o RANGE con segnali deboli, con perdite consecutive
 o win rate crollato. Tieni ACTIVE solo condizioni pulite. Usa WATCH per i casi incerti.
+
+Per SUPER_ADAPTIVE puoi anche proporre un campo "params" con SOLO i parametri da cambiare
+(chiavi sconosciute e valori fuori intervallo verranno scartati). Intervalli ammessi:
+{bounds_txt}
+Esempio: {{"action": "WATCH", "confidence": 0.7, "reason": "...", "params": {{"score_threshold": 0.7}}}}
+Per le altre strategie ometti "params". Non applicare nulla in autonomia: proponi solo.
 
 ## OUTPUT (SOLO JSON valido, niente testo fuori dal JSON)
 Rispondi con un JSON nel formato esatto:
@@ -374,6 +393,20 @@ def _merge_recommendations(states: list[dict], llm: Optional[dict], cfg: dict) -
 
         reason = str(dec.get("reason", "")).strip()[:500]
 
+        # SUPER_ADAPTIVE: parametri proposti dal LLM, validati con gli stessi
+        # guardrail usati dal segnale. Le altre strategie non hanno params.
+        suggested_params = None
+        if s.get("strategy") == "SUPER_ADAPTIVE":
+            raw_params = dec.get("params")
+            if isinstance(raw_params, dict) and raw_params:
+                raw_params = {k: v for k, v in raw_params.items() if k != "config_version"}
+                validated = AdaptiveParams.from_dict(raw_params).to_dict()
+                defaults = AdaptiveParams().to_dict()
+                suggested_params = {
+                    k: validated[k] for k in raw_params
+                    if k in validated and validated[k] != defaults.get(k)
+                } or None
+
         forced, safety_reason = _safety_check(s, cfg)
         safety_override = False
         if forced:
@@ -398,6 +431,8 @@ def _merge_recommendations(states: list[dict], llm: Optional[dict], cfg: dict) -
             "safety_reason": safety_reason,
             "market": s.get("market"),
             "performance": s.get("performance"),
+            "current_params": s.get("params") if s.get("strategy") == "SUPER_ADAPTIVE" else None,
+            "suggested_params": suggested_params,
         })
 
     return recommendations
